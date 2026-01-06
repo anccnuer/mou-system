@@ -60,6 +60,23 @@ export function initDatabase() {
     );
   `);
 
+  // 创建操作记录表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS operation_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      operation_type TEXT NOT NULL,
+      operation_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      user_id INTEGER,
+      store_id INTEGER NOT NULL,
+      details TEXT NOT NULL,
+      is_revoked INTEGER DEFAULT 0,
+      revoked_time TIMESTAMP,
+      revoked_by INTEGER,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (store_id) REFERENCES stores(id)
+    );
+  `);
+
   // 创建默认店铺
   const defaultStoreExists = db.prepare('SELECT * FROM stores WHERE id = 1').get();
   if (!defaultStoreExists) {
@@ -132,4 +149,39 @@ export function deleteStore(storeId: number): any {
 
 export function getStoreById(storeId: number): any {
   return db.prepare('SELECT * FROM stores WHERE id = ?').get(storeId);
+}
+
+export function createOperationLog(operationType: string, userId: number | null, storeId: number, details: string): any {
+  const result = db.prepare('INSERT INTO operation_logs (operation_type, user_id, store_id, details) VALUES (?, ?, ?, ?)').run(operationType, userId, storeId, details);
+  return { id: result.lastInsertRowid };
+}
+
+export function getOperationLogs(storeId: number, limit: number = 50, offset: number = 0): any {
+  return db.prepare(`
+    SELECT ol.*, u.username as user_name, ru.username as revoked_by_name
+    FROM operation_logs ol
+    LEFT JOIN users u ON ol.user_id = u.id
+    LEFT JOIN users ru ON ol.revoked_by = ru.id
+    WHERE ol.store_id = ?
+    ORDER BY ol.operation_time DESC
+    LIMIT ? OFFSET ?
+  `).all(storeId, limit, offset);
+}
+
+export function getOperationLogById(logId: number): any {
+  return db.prepare('SELECT * FROM operation_logs WHERE id = ?').get(logId);
+}
+
+export function revokeOperation(logId: number, revokedBy: number): any {
+  const log = getOperationLogById(logId);
+  if (!log) {
+    return { error: '操作记录不存在' };
+  }
+  if (log.is_revoked) {
+    return { error: '该操作已被撤回' };
+  }
+  
+  const revokedTime = new Date().toISOString();
+  db.prepare('UPDATE operation_logs SET is_revoked = 1, revoked_time = ?, revoked_by = ? WHERE id = ?').run(revokedTime, revokedBy, logId);
+  return { success: true, log };
 }

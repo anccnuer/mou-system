@@ -1,6 +1,6 @@
 import { Elysia, t } from 'elysia';
 import { jwt } from '@elysiajs/jwt';
-import { db, initDatabase, createUser, getUserByUsername, getUserById, getUserByIdWithPassword, adminUserExists, createDefaultAdminUser, updateUserPassword, getAllStores, createStore, deleteStore, getStoreById } from './src/db';
+import { db, initDatabase, createUser, getUserByUsername, getUserById, getUserByIdWithPassword, adminUserExists, createDefaultAdminUser, updateUserPassword, getAllStores, createStore, deleteStore, getStoreById, createOperationLog, getOperationLogs, getOperationLogById, revokeOperation } from './src/db';
 import { join } from 'path';
 import { scrypt, randomBytes } from 'crypto';
 import { promisify } from 'util';
@@ -272,10 +272,30 @@ const app = new Elysia()
   })
 
   // 添加新食材 - 接受name、quantity、unit和store_id四个参数
-  .post('/ingredients', ({ body }) => {
+  .post('/ingredients', async ({ body, jwt, request }) => {
     const { name, quantity, unit, store_id } = body;
     db.prepare('INSERT INTO ingredients (name, quantity, unit, store_id) VALUES (?, ?, ?, ?)').run(name, quantity, unit, store_id);
-    return db.prepare('SELECT * FROM ingredients WHERE name = ? AND store_id = ?').get(name, store_id);
+    const ingredient = db.prepare('SELECT * FROM ingredients WHERE name = ? AND store_id = ?').get(name, store_id);
+    
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    let userId = null;
+    
+    if (token) {
+      const payload = await jwt.verify(token);
+      if (payload) {
+        userId = Number(payload.sub);
+      }
+    }
+    
+    createOperationLog('ingredient_add', userId, store_id, JSON.stringify({
+      ingredient_id: ingredient.id,
+      ingredient_name: name,
+      quantity,
+      unit
+    }));
+    
+    return ingredient;
   }, {
     body: t.Object({
       name: t.String(),
@@ -286,13 +306,53 @@ const app = new Elysia()
   })
 
   // 更新食材信息（包括库存和单位）
-  .put('/ingredients/:id', ({ params, body }) => {
+  .put('/ingredients/:id', async ({ params, body, jwt, request }) => {
     const { id } = params;
     const { quantity, unit } = body;
+    
+    const oldIngredient = db.prepare('SELECT * FROM ingredients WHERE id = ?').get(id);
+    if (!oldIngredient) {
+      return { error: '食材不存在' };
+    }
+    
     const result = db.prepare('UPDATE ingredients SET quantity = ?, unit = ? WHERE id = ?').run(quantity, unit, id);
     if (result.changes === 0) {
       return { error: '食材不存在' };
     }
+    
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    let userId = null;
+    
+    if (token) {
+      const payload = await jwt.verify(token);
+      if (payload) {
+        userId = Number(payload.sub);
+      }
+    }
+    
+    // 判断是补货还是编辑
+    if (quantity > oldIngredient.quantity) {
+      const restockQuantity = quantity - oldIngredient.quantity;
+      createOperationLog('ingredient_restock', userId, oldIngredient.store_id, JSON.stringify({
+        ingredient_id: parseInt(id),
+        ingredient_name: oldIngredient.name,
+        restock_quantity: restockQuantity,
+        old_quantity: oldIngredient.quantity,
+        new_quantity: quantity,
+        unit
+      }));
+    } else {
+      createOperationLog('ingredient_edit', userId, oldIngredient.store_id, JSON.stringify({
+        ingredient_id: parseInt(id),
+        ingredient_name: oldIngredient.name,
+        old_quantity: oldIngredient.quantity,
+        new_quantity: quantity,
+        old_unit: oldIngredient.unit,
+        new_unit: unit
+      }));
+    }
+    
     return db.prepare('SELECT * FROM ingredients WHERE id = ?').get(id);
   }, {
     params: t.Object({
@@ -305,12 +365,34 @@ const app = new Elysia()
   })
 
   // 删除食材
-  .delete('/ingredients/:id', ({ params }) => {
+  .delete('/ingredients/:id', async ({ params, jwt, request }) => {
     const { id } = params;
+    
+    const ingredient = db.prepare('SELECT * FROM ingredients WHERE id = ?').get(id);
+    if (!ingredient) {
+      return { error: '食材不存在' };
+    }
+    
     const result = db.prepare('DELETE FROM ingredients WHERE id = ?').run(id);
     if (result.changes === 0) {
       return { error: '食材不存在' };
     }
+    
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    let userId = null;
+    
+    if (token) {
+      const payload = await jwt.verify(token);
+      if (payload) {
+        userId = Number(payload.sub);
+      }
+    }
+    
+    createOperationLog('ingredient_delete', userId, ingredient.store_id, JSON.stringify({
+      deleted_ingredient: ingredient
+    }));
+    
     return { message: '食材删除成功' };
   }, {
     params: t.Object({
@@ -405,7 +487,7 @@ const app = new Elysia()
   })
 
   // 使用菜品，减少食材库存
-  .post('/dishes/:id/use', ({ params, query }) => {
+  .post('/dishes/:id/use', async ({ params, query, jwt, request }) => {
     const { id } = params;
     const quantity = parseInt(query.quantity || '1');
     const storeId = query.store_id ? parseInt(query.store_id as string) : 1;
@@ -451,12 +533,38 @@ const app = new Elysia()
       }
     }
 
+    // 记录使用的食材信息（用于撤回）
+    const usedIngredients = ingredients.map(ing => ({
+      ingredient_id: ing.id,
+      ingredient_name: ing.name,
+      quantity: ing.required_quantity * quantity
+    }));
+
     // 减少食材库存（考虑使用数量）
     for (const ing of ingredients) {
       const totalQuantity = ing.required_quantity * quantity;
       console.log(`减少食材 ${ing.name} 库存: ${ing.current_quantity} - ${totalQuantity}`);
       db.prepare('UPDATE ingredients SET quantity = quantity - ? WHERE id = ?').run(totalQuantity, ing.id);
     }
+
+    // 记录操作日志
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    let userId = null;
+    
+    if (token) {
+      const payload = await jwt.verify(token);
+      if (payload) {
+        userId = Number(payload.sub);
+      }
+    }
+    
+    createOperationLog('dish_use', userId, storeId, JSON.stringify({
+      dish_id: parseInt(id),
+      dish_name: dish.name,
+      quantity,
+      used_ingredients: usedIngredients
+    }));
 
     // 返回更新后的菜品信息和食材库存
     const updatedIngredients = db.prepare(`
@@ -481,9 +589,12 @@ const app = new Elysia()
   })
 
   // 批量使用菜品
-  .post('/dishes/batch-use', async ({ body }) => {
+  .post('/dishes/batch-use', async ({ body, jwt, request }) => {
     const { dishes, store_id } = body as { dishes: Array<{ name: string; quantity: number }>, store_id: number };
     const results = [];
+    
+    // 记录所有成功使用的菜品信息（用于撤回）
+    const batchResults = [];
     
     for (const item of dishes) {
       const dish = db.prepare('SELECT * FROM dishes WHERE name = ? AND store_id = ?').get(item.name, store_id);
@@ -516,13 +627,40 @@ const app = new Elysia()
         }
       }
       
+      const usedIngredients = ingredients.map(ing => ({
+        ingredient_id: ing.id,
+        ingredient_name: ing.name,
+        quantity: ing.required_quantity * item.quantity
+      }));
+      
       for (const ing of ingredients) {
         db.prepare('UPDATE ingredients SET quantity = quantity - ? WHERE id = ?')
           .run(ing.required_quantity * item.quantity, ing.id);
       }
       
       results.push({ name: item.name, success: true });
+      batchResults.push({
+        name: item.name,
+        success: true,
+        used_ingredients: usedIngredients
+      });
     }
+    
+    // 记录操作日志
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    let userId = null;
+    
+    if (token) {
+      const payload = await jwt.verify(token);
+      if (payload) {
+        userId = Number(payload.sub);
+      }
+    }
+    
+    createOperationLog('dish_batch_use', userId, store_id, JSON.stringify({
+      batch_results: batchResults
+    }));
     
     return { results };
   }, {
@@ -562,6 +700,137 @@ const app = new Elysia()
     const storeId = query.store_id ? parseInt(query.store_id as string) : 1;
     const ingredients = db.prepare('SELECT id, name, unit FROM ingredients WHERE store_id = ? ORDER BY name').all(storeId);
     return ingredients;
+  })
+
+  // 操作记录 API
+  // 获取操作记录列表
+  .get('/operation-logs', async ({ query, jwt, request }) => {
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    let userId = null;
+    
+    if (token) {
+      const payload = await jwt.verify(token);
+      if (payload) {
+        userId = Number(payload.sub);
+      }
+    }
+    
+    const storeId = query.store_id ? parseInt(query.store_id as string) : 1;
+    const limit = query.limit ? parseInt(query.limit as string) : 50;
+    const offset = query.offset ? parseInt(query.offset as string) : 0;
+    
+    const logs = getOperationLogs(storeId, limit, offset);
+    return logs;
+  })
+
+  // 获取单条操作记录详情
+  .get('/operation-logs/:id', ({ params }) => {
+    const { id } = params;
+    const log = getOperationLogById(parseInt(id));
+    if (!log) {
+      return { error: '操作记录不存在' };
+    }
+    return log;
+  }, {
+    params: t.Object({
+      id: t.String()
+    })
+  })
+
+  // 撤回操作
+  .post('/operation-logs/revoke/:id', async ({ params, jwt, request }) => {
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    
+    if (!token) {
+      return new Response(JSON.stringify({ error: '未登录' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    const payload = await jwt.verify(token);
+    if (!payload) {
+      return new Response(JSON.stringify({ error: '登录已过期' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    const userId = Number(payload.sub);
+    const { id } = params;
+    const logId = parseInt(id);
+    
+    const log = getOperationLogById(logId);
+    if (!log) {
+      return { error: '操作记录不存在' };
+    }
+    
+    if (log.is_revoked) {
+      return { error: '该操作已被撤回' };
+    }
+    
+    const details = JSON.parse(log.details);
+    let success = false;
+    let error = '';
+    
+    switch (log.operation_type) {
+      case 'ingredient_restock':
+        const { ingredient_id, restock_quantity, old_quantity } = details;
+        const newQuantity = old_quantity;
+        db.prepare('UPDATE ingredients SET quantity = ? WHERE id = ?').run(newQuantity, ingredient_id);
+        success = true;
+        break;
+        
+      case 'ingredient_edit':
+        const { ingredient_id: edit_id, old_quantity: edit_old_quantity, old_unit: edit_old_unit } = details;
+        db.prepare('UPDATE ingredients SET quantity = ?, unit = ? WHERE id = ?').run(edit_old_quantity, edit_old_unit, edit_id);
+        success = true;
+        break;
+        
+      case 'ingredient_delete':
+        const { deleted_ingredient } = details;
+        db.prepare('INSERT INTO ingredients (id, name, quantity, unit, store_id) VALUES (?, ?, ?, ?, ?)').run(
+          deleted_ingredient.id, deleted_ingredient.name, deleted_ingredient.quantity, deleted_ingredient.unit, deleted_ingredient.store_id
+        );
+        success = true;
+        break;
+        
+      case 'dish_use':
+        const { dish_id, used_ingredients } = details;
+        for (const ing of used_ingredients) {
+          db.prepare('UPDATE ingredients SET quantity = quantity + ? WHERE id = ?').run(ing.quantity, ing.ingredient_id);
+        }
+        success = true;
+        break;
+        
+      case 'dish_batch_use':
+        const { batch_results } = details;
+        for (const result of batch_results) {
+          if (result.success && result.used_ingredients) {
+            for (const ing of result.used_ingredients) {
+              db.prepare('UPDATE ingredients SET quantity = quantity + ? WHERE id = ?').run(ing.quantity, ing.ingredient_id);
+            }
+          }
+        }
+        success = true;
+        break;
+        
+      default:
+        error = '不支持撤回此操作类型';
+    }
+    
+    if (success) {
+      const revokeResult = revokeOperation(logId, userId);
+      return { message: '撤回成功', log: revokeResult.log };
+    } else {
+      return { error };
+    }
+  }, {
+    params: t.Object({
+      id: t.String()
+    })
   })
 
   .listen(3000);
