@@ -1,6 +1,6 @@
 import { Elysia, t } from 'elysia';
 import { jwt } from '@elysiajs/jwt';
-import { db, initDatabase, createUser, getUserByUsername, getUserById, getUserByIdWithPassword, adminUserExists, createDefaultAdminUser, updateUserPassword } from './src/db';
+import { db, initDatabase, createUser, getUserByUsername, getUserById, getUserByIdWithPassword, adminUserExists, createDefaultAdminUser, updateUserPassword, getAllStores, createStore, deleteStore, getStoreById } from './src/db';
 import { join } from 'path';
 import { scrypt, randomBytes } from 'crypto';
 import { promisify } from 'util';
@@ -207,10 +207,53 @@ const app = new Elysia()
     })
   })
 
+  // 店铺管理 API
+  // 获取所有店铺
+  .get('/stores', () => {
+    const stores = getAllStores();
+    return stores;
+  })
+
+  // 创建新店铺
+  .post('/stores', ({ body }) => {
+    const { name } = body;
+    const store = createStore(name);
+    return store;
+  }, {
+    body: t.Object({
+      name: t.String()
+    })
+  })
+
+  // 删除店铺
+  .delete('/stores/:id', ({ params }) => {
+    const { id } = params;
+    const storeId = parseInt(id);
+    
+    // 检查是否有食材或菜品关联到该店铺
+    const ingredientCount = db.prepare('SELECT COUNT(*) as count FROM ingredients WHERE store_id = ?').get(storeId) as { count: number };
+    const dishCount = db.prepare('SELECT COUNT(*) as count FROM dishes WHERE store_id = ?').get(storeId) as { count: number };
+    
+    if (ingredientCount.count > 0 || dishCount.count > 0) {
+      return { error: '该店铺下还有食材或菜品，无法删除' };
+    }
+    
+    const result = deleteStore(storeId);
+    if (result.changes === 0) {
+      return { error: '店铺不存在' };
+    }
+    return { message: '店铺删除成功' };
+  }, {
+    params: t.Object({
+      id: t.String()
+    })
+  })
+
   // 食材管理 API
   // 获取所有食材
-  .get('/ingredients', () => {
-    const ingredients = db.prepare('SELECT * FROM ingredients ORDER BY id').all();
+  .get('/ingredients', ({ query }) => {
+    const storeId = query.store_id ? parseInt(query.store_id as string) : 1;
+    const ingredients = db.prepare('SELECT * FROM ingredients WHERE store_id = ? ORDER BY id').all(storeId);
     return ingredients;
   })
 
@@ -228,16 +271,17 @@ const app = new Elysia()
     })
   })
 
-  // 添加新食材 - 接受name、quantity和unit三个参数
+  // 添加新食材 - 接受name、quantity、unit和store_id四个参数
   .post('/ingredients', ({ body }) => {
-    const { name, quantity, unit } = body;
-    db.prepare('INSERT INTO ingredients (name, quantity, unit) VALUES (?, ?, ?)').run(name, quantity, unit);
-    return db.prepare('SELECT * FROM ingredients WHERE name = ?').get(name);
+    const { name, quantity, unit, store_id } = body;
+    db.prepare('INSERT INTO ingredients (name, quantity, unit, store_id) VALUES (?, ?, ?, ?)').run(name, quantity, unit, store_id);
+    return db.prepare('SELECT * FROM ingredients WHERE name = ? AND store_id = ?').get(name, store_id);
   }, {
     body: t.Object({
       name: t.String(),
       quantity: t.Number(),
-      unit: t.String()
+      unit: t.String(),
+      store_id: t.Number()
     })
   })
 
@@ -276,8 +320,9 @@ const app = new Elysia()
 
   // 菜品管理 API
   // 获取所有菜品
-  .get('/dishes', () => {
-    const dishes = db.prepare('SELECT * FROM dishes ORDER BY id').all();
+  .get('/dishes', ({ query }) => {
+    const storeId = query.store_id ? parseInt(query.store_id as string) : 1;
+    const dishes = db.prepare('SELECT * FROM dishes WHERE store_id = ? ORDER BY id').all(storeId);
     return dishes;
   })
 
@@ -308,11 +353,11 @@ const app = new Elysia()
 
   // 添加新菜品
   .post('/dishes', ({ body }) => {
-    const { name, ingredients } = body;
+    const { name, ingredients, store_id } = body;
     
     // 插入菜品
-    db.prepare('INSERT INTO dishes (name) VALUES (?)').run(name);
-    const dish = db.prepare('SELECT * FROM dishes WHERE name = ?').get(name);
+    db.prepare('INSERT INTO dishes (name, store_id) VALUES (?, ?)').run(name, store_id);
+    const dish = db.prepare('SELECT * FROM dishes WHERE name = ? AND store_id = ?').get(name, store_id);
     const dishId = dish.id;
 
     // 插入菜品食材关联
@@ -340,7 +385,8 @@ const app = new Elysia()
       ingredients: t.Array(t.Object({
         ingredient_id: t.Number(),
         quantity: t.Optional(t.Number())
-      }))
+      })),
+      store_id: t.Number()
     })
   })
 
@@ -362,8 +408,9 @@ const app = new Elysia()
   .post('/dishes/:id/use', ({ params, query }) => {
     const { id } = params;
     const quantity = parseInt(query.quantity || '1');
+    const storeId = query.store_id ? parseInt(query.store_id as string) : 1;
     
-    console.log('收到使用菜品请求:', { id, query, quantity });
+    console.log('收到使用菜品请求:', { id, query, quantity, storeId });
     
     // 检查菜品是否存在
     const dish = db.prepare('SELECT * FROM dishes WHERE id = ?').get(id);
@@ -383,17 +430,17 @@ const app = new Elysia()
       return { error: '该菜品没有配置任何食材，无法使用' };
     }
 
-    // 获取菜品所需食材及其当前库存
+    // 获取菜品所需食材及其当前库存（只获取当前店铺的食材）
     const ingredients = db.prepare(`
       SELECT i.id, i.name, i.quantity AS current_quantity, di.quantity AS required_quantity
       FROM dish_ingredients di
       JOIN ingredients i ON di.ingredient_id = i.id
-      WHERE di.dish_id = ?
-    `).all(id);
+      WHERE di.dish_id = ? AND i.store_id = ?
+    `).all(id, storeId);
 
     // 检查是否所有所需食材都存在
     if (ingredients.length < requiredIngredients.length) {
-      return { error: '该菜品所需的某些食材已被删除，无法使用' };
+      return { error: '该菜品所需的某些食材已被删除或不在当前店铺，无法使用' };
     }
 
     // 检查食材库存是否足够（考虑使用数量）
@@ -416,8 +463,8 @@ const app = new Elysia()
       SELECT i.id, i.name, i.quantity
       FROM dish_ingredients di
       JOIN ingredients i ON di.ingredient_id = i.id
-      WHERE di.dish_id = ?
-    `).all(id);
+      WHERE di.dish_id = ? AND i.store_id = ?
+    `).all(id, storeId);
 
     return {
       dish,
@@ -428,17 +475,18 @@ const app = new Elysia()
       id: t.String()
     }),
     query: t.Object({
-      quantity: t.Optional(t.String())
+      quantity: t.Optional(t.String()),
+      store_id: t.Optional(t.String())
     })
   })
 
   // 批量使用菜品
   .post('/dishes/batch-use', async ({ body }) => {
-    const { dishes } = body as { dishes: Array<{ name: string; quantity: number }> };
+    const { dishes, store_id } = body as { dishes: Array<{ name: string; quantity: number }>, store_id: number };
     const results = [];
     
     for (const item of dishes) {
-      const dish = db.prepare('SELECT * FROM dishes WHERE name = ?').get(item.name);
+      const dish = db.prepare('SELECT * FROM dishes WHERE name = ? AND store_id = ?').get(item.name, store_id);
       if (!dish) {
         results.push({ name: item.name, success: false, error: '菜品不存在' });
         continue;
@@ -448,8 +496,8 @@ const app = new Elysia()
         SELECT i.id, i.name, i.quantity AS current_quantity, di.quantity AS required_quantity
         FROM dish_ingredients di
         JOIN ingredients i ON di.ingredient_id = i.id
-        WHERE di.dish_id = ?
-      `).all(dish.id);
+        WHERE di.dish_id = ? AND i.store_id = ?
+      `).all(dish.id, store_id);
       
       if (ingredients.length === 0) {
         results.push({ name: item.name, success: false, error: '该菜品没有配置食材' });
@@ -482,32 +530,37 @@ const app = new Elysia()
       dishes: t.Array(t.Object({
         name: t.String(),
         quantity: t.Number()
-      }))
+      })),
+      store_id: t.Number()
     })
   })
 
   // 前端动态内容 API - 现在返回JSON数据
   // 获取食材列表JSON
-  .get('/ingredients-table', () => {
-    const ingredients = db.prepare('SELECT * FROM ingredients ORDER BY id').all();
+  .get('/ingredients-table', ({ query }) => {
+    const storeId = query.store_id ? parseInt(query.store_id as string) : 1;
+    const ingredients = db.prepare('SELECT * FROM ingredients WHERE store_id = ? ORDER BY id').all(storeId);
     return ingredients;
   })
 
   // 获取菜品列表JSON
-  .get('/dishes-table', () => {
-    const dishes = db.prepare('SELECT * FROM dishes ORDER BY id').all();
+  .get('/dishes-table', ({ query }) => {
+    const storeId = query.store_id ? parseInt(query.store_id as string) : 1;
+    const dishes = db.prepare('SELECT * FROM dishes WHERE store_id = ? ORDER BY id').all(storeId);
     return dishes;
   })
 
   // 获取菜品使用列表JSON
-  .get('/use-dishes-table', () => {
-    const dishes = db.prepare('SELECT * FROM dishes ORDER BY id').all();
+  .get('/use-dishes-table', ({ query }) => {
+    const storeId = query.store_id ? parseInt(query.store_id as string) : 1;
+    const dishes = db.prepare('SELECT * FROM dishes WHERE store_id = ? ORDER BY id').all(storeId);
     return dishes;
   })
 
   // 获取食材选项JSON
-  .get('/ingredients-options', () => {
-    const ingredients = db.prepare('SELECT id, name, unit FROM ingredients ORDER BY name').all();
+  .get('/ingredients-options', ({ query }) => {
+    const storeId = query.store_id ? parseInt(query.store_id as string) : 1;
+    const ingredients = db.prepare('SELECT id, name, unit FROM ingredients WHERE store_id = ? ORDER BY name').all(storeId);
     return ingredients;
   })
 

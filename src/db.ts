@@ -5,14 +5,25 @@ export const db = new Database('inventory.db');
 
 // 初始化表结构
 export function initDatabase() {
+  // 创建店铺表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS stores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // 创建食材表
   db.exec(`
     CREATE TABLE IF NOT EXISTS ingredients (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
       quantity INTEGER NOT NULL DEFAULT 0,
       unit TEXT NOT NULL DEFAULT '个',
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      store_id INTEGER NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (store_id) REFERENCES stores(id)
     );
   `);
 
@@ -20,8 +31,10 @@ export function initDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS dishes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT UNIQUE NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      name TEXT NOT NULL,
+      store_id INTEGER NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (store_id) REFERENCES stores(id)
     );
   `);
 
@@ -46,6 +59,22 @@ export function initDatabase() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  // 创建默认店铺
+  const defaultStoreExists = db.prepare('SELECT * FROM stores WHERE id = 1').get();
+  if (!defaultStoreExists) {
+    db.prepare('INSERT INTO stores (id, name) VALUES (1, ?)').run('默认店铺');
+  }
+
+  // 迁移现有数据：为没有 store_id 的食材和菜品设置默认店铺
+  try {
+    db.exec(`
+      UPDATE ingredients SET store_id = 1 WHERE store_id IS NULL OR store_id = 0;
+      UPDATE dishes SET store_id = 1 WHERE store_id IS NULL OR store_id = 0;
+    `);
+  } catch (e) {
+    console.log('数据迁移完成或无需迁移');
+  }
 }
 
 // 用户注册
@@ -84,4 +113,23 @@ export function adminUserExists(): any {
 export function updateUserPassword(userId: number, newPasswordHash: string): any {
   const result = db.prepare('UPDATE users SET password = ? WHERE id = ?').run(newPasswordHash, userId);
   return { changes: result.changes };
+}
+
+// 店铺管理函数
+export function getAllStores(): any {
+  return db.prepare('SELECT * FROM stores ORDER BY id').all();
+}
+
+export function createStore(name: string): any {
+  const result = db.prepare('INSERT INTO stores (name) VALUES (?)').run(name);
+  return { id: result.lastInsertRowid, name };
+}
+
+export function deleteStore(storeId: number): any {
+  const result = db.prepare('DELETE FROM stores WHERE id = ?').run(storeId);
+  return { changes: result.changes };
+}
+
+export function getStoreById(storeId: number): any {
+  return db.prepare('SELECT * FROM stores WHERE id = ?').get(storeId);
 }
