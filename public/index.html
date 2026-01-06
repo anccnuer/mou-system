@@ -18,130 +18,114 @@
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
-    <div class="container mx-auto px-4 py-8">
-        <h1 class="text-3xl font-bold text-center text-gray-800 mb-8">食材与菜品管理系统</h1>
-        
-        <!-- 导航标签 -->
-        <div class="flex justify-center mb-8">
-            <div class="inline-flex rounded-md shadow-sm" role="group">
-                <button type="button" class="tab-btn px-6 py-3 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-l-lg hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700" onclick="switchTab('ingredients')">
-                    食材管理
-                </button>
-                <button type="button" class="tab-btn px-6 py-3 text-sm font-medium text-gray-900 bg-white border-t border-b border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700" onclick="switchTab('dishes')">
-                    菜品管理
-                </button>
-                <button type="button" class="tab-btn px-6 py-3 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-r-lg hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700" onclick="switchTab('use-dish')">
-                    菜品使用
-                </button>
-            </div>
-        </div>
-
-        <!-- 食材管理 -->
-        <div id="ingredients" class="tab-content active">
-            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-                <h2 class="text-xl font-semibold mb-4 text-gray-800">添加新食材</h2>
-                <form id="add-ingredient-form" class="flex gap-4">
-                    <div class="flex-1">
-                        <label for="ingredient-name" class="block text-sm font-medium text-gray-700 mb-1">食材名称</label>
-                        <input type="text" id="ingredient-name" name="name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    <div class="w-32">
-                        <label for="ingredient-unit" class="block text-sm font-medium text-gray-700 mb-1">单位</label>
-                        <input type="text" id="ingredient-unit" name="unit" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="kg、个等">
-                    </div>
-                    <div class="w-32">
-                        <label for="ingredient-quantity" class="block text-sm font-medium text-gray-700 mb-1">初始库存</label>
-                        <input type="number" id="ingredient-quantity" name="quantity" min="0" value="0" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    <div class="flex items-end">
-                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">添加</button>
-                    </div>
-                </form>
-            </div>
-
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-xl font-semibold mb-4 text-gray-800">食材列表</h2>
-                <div id="ingredients-list" class="overflow-x-auto">
-                    <table class="w-full border-collapse">
-                        <thead>
-                            <tr class="bg-gray-100">
-                                <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">ID</th>
-                                <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">名称</th>
-                                <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">单位</th>
-                                <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">库存</th>
-                                <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">创建时间</th>
-                                <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="ingredients-body">
-                            <!-- 食材列表将通过JavaScript动态加载 -->
-                        </tbody>
-                    </table>
+    <!-- 主界面内容（登录前隐藏） -->
+    <div id="main-content" class="hidden">
+        <div class="container mx-auto px-4 py-8">
+            <div class="flex justify-between items-center mb-8">
+                <h1 class="text-3xl font-bold text-center text-gray-800">食材与菜品管理系统</h1>
+                <div class="flex items-center gap-4">
+                    <span class="text-gray-700">欢迎，<span id="current-username" class="font-medium"></span></span>
+                    <button onclick="logout()" class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors">退出登录</button>
                 </div>
             </div>
-        </div>
+            
+            <!-- 导航标签 -->
+            <div class="flex justify-center mb-8">
+                <div class="inline-flex rounded-md shadow-sm" role="group">
+                    <button type="button" class="tab-btn px-6 py-3 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-l-lg hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700" onclick="switchTab('ingredients')">
+                        食材管理
+                    </button>
+                    <button type="button" class="tab-btn px-6 py-3 text-sm font-medium text-gray-900 bg-white border-t border-b border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700" onclick="switchTab('dishes')">
+                        菜品管理
+                    </button>
+                    <button type="button" class="tab-btn px-6 py-3 text-sm font-medium text-gray-900 bg-white border border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700" onclick="switchTab('password')">
+                        修改密码
+                    </button>
+                    <button type="button" class="tab-btn px-6 py-3 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-r-lg hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700" onclick="switchTab('use-dish')">
+                        菜品使用
+                    </button>
+                </div>
+            </div>
 
-        <!-- 菜品管理 -->
-        <div id="dishes" class="tab-content">
-            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-                <h2 class="text-xl font-semibold mb-4 text-gray-800">添加新菜品</h2>
-                <form id="add-dish-form" class="space-y-4">
-                    <div>
-                        <label for="dish-name" class="block text-sm font-medium text-gray-700 mb-1">菜品名称</label>
-                        <input type="text" id="dish-name" name="name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <!-- 食材管理 -->
+            <div id="ingredients" class="tab-content active">
+                <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">添加新食材</h2>
+                    <form id="add-ingredient-form" class="flex gap-4">
+                        <div class="flex-1">
+                            <label for="ingredient-name" class="block text-sm font-medium text-gray-700 mb-1">食材名称</label>
+                            <input type="text" id="ingredient-name" name="name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="w-32">
+                            <label for="ingredient-unit" class="block text-sm font-medium text-gray-700 mb-1">单位</label>
+                            <input type="text" id="ingredient-unit" name="unit" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="kg、个等">
+                        </div>
+                        <div class="w-32">
+                            <label for="ingredient-quantity" class="block text-sm font-medium text-gray-700 mb-1">初始库存</label>
+                            <input type="number" id="ingredient-quantity" name="quantity" min="0" value="0" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="flex items-end">
+                            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">添加</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">食材列表</h2>
+                    <div id="ingredients-list" class="overflow-x-auto">
+                        <table class="w-full border-collapse">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">ID</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">名称</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">单位</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">库存</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">创建时间</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ingredients-body">
+                            </tbody>
+                        </table>
                     </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">所需食材</label>
-                        <div id="dish-ingredients-container" class="space-y-3">
-                            <div class="flex gap-4 items-end">
-                                <select name="ingredients[0][ingredient_id]" required class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <option value="">选择食材</option>
-                                    <!-- 食材选项将通过JavaScript动态加载 -->
-                                </select>
-                                <div class="flex items-center">
-                                    <input type="number" name="ingredients[0][quantity]" min="1" value="1" placeholder="所需数量" class="w-24 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <span class="px-3 py-2 bg-gray-100 text-gray-700 border-t border-b border-r border-gray-300 rounded-r-md">单位</span>
+                </div>
+            </div>
+
+            <!-- 菜品管理 -->
+            <div id="dishes" class="tab-content">
+                <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">添加新菜品</h2>
+                    <form id="add-dish-form" class="space-y-4">
+                        <div>
+                            <label for="dish-name" class="block text-sm font-medium text-gray-700 mb-1">菜品名称</label>
+                            <input type="text" id="dish-name" name="name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">所需食材</label>
+                            <div id="dish-ingredients-container" class="space-y-3">
+                                <div class="flex gap-4 items-end">
+                                    <select name="ingredients[0][ingredient_id]" required class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="">选择食材</option>
+                                    </select>
+                                    <div class="flex items-center">
+                                        <input type="number" name="ingredients[0][quantity]" min="1" value="1" placeholder="所需数量" class="w-24 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <span class="px-3 py-2 bg-gray-100 text-gray-700 border-t border-b border-r border-gray-300 rounded-r-md">单位</span>
+                                    </div>
+                                    <button type="button" class="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200" onclick="addDishIngredient()">+</button>
                                 </div>
-                                <button type="button" class="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200" onclick="addDishIngredient()">+</button>
                             </div>
                         </div>
-                    </div>
-                    
-                    <div class="flex justify-end">
-                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">添加</button>
-                    </div>
-                </form>
-            </div>
-
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-xl font-semibold mb-4 text-gray-800">菜品列表</h2>
-                <div id="dishes-list" class="overflow-x-auto">
-                    <table class="w-full border-collapse">
-                        <thead>
-                            <tr class="bg-gray-100">
-                                <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">ID</th>
-                                <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">名称</th>
-                                <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">创建时间</th>
-                                <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="dishes-body">
-                            <!-- 菜品列表将通过JavaScript动态加载 -->
-                        </tbody>
-                    </table>
+                        
+                        <div class="flex justify-end">
+                            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">添加</button>
+                        </div>
+                    </form>
                 </div>
-            </div>
-        </div>
 
-        <!-- 菜品使用 -->
-        <div id="use-dish" class="tab-content">
-            <h2 class="text-xl font-semibold mb-4 text-gray-800">使用菜品</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- 左侧：使用菜品 -->
                 <div class="bg-white rounded-lg shadow-md p-6">
-                    <h3 class="text-lg font-medium mb-4 text-gray-800">菜品列表</h3>
-                    <div class="overflow-x-auto">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">菜品列表</h2>
+                    <div id="dishes-list" class="overflow-x-auto">
                         <table class="w-full border-collapse">
                             <thead>
                                 <tr class="bg-gray-100">
@@ -151,66 +135,225 @@
                                     <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">操作</th>
                                 </tr>
                             </thead>
-                            <tbody id="use-dishes-body">
-                                <!-- 菜品列表将通过JavaScript动态加载 -->
+                            <tbody id="dishes-body">
                             </tbody>
                         </table>
                     </div>
                 </div>
-                
-                <!-- 右侧：实时食材列表 -->
+            </div>
+
+            <!-- 密码修改 -->
+            <div id="password" class="tab-content">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">修改密码</h2>
                 <div class="bg-white rounded-lg shadow-md p-6">
-                    <h3 class="text-lg font-medium mb-4 text-gray-800">实时食材库存</h3>
-                    <div class="overflow-x-auto">
-                        <table class="w-full border-collapse">
-                            <thead>
-                                <tr class="bg-gray-100">
-                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">ID</th>
-                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">名称</th>
-                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">单位</th>
-                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">库存</th>
-                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">创建时间</th>
-                                </tr>
-                            </thead>
-                            <tbody id="real-time-ingredients-body">
-                                <!-- 实时食材列表将通过JavaScript动态加载 -->
-                            </tbody>
-                        </table>
+                    <form id="password-form" class="space-y-4">
+                        <div>
+                            <label for="current-password" class="block text-sm font-medium text-gray-700 mb-1">当前密码</label>
+                            <input type="password" id="current-password" name="current_password" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label for="new-password" class="block text-sm font-medium text-gray-700 mb-1">新密码</label>
+                            <input type="password" id="new-password" name="new_password" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label for="confirm-password" class="block text-sm font-medium text-gray-700 mb-1">确认新密码</label>
+                            <input type="password" id="confirm-password" name="confirm_password" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div id="password-error" class="mb-4 text-red-600 text-sm text-center hidden"></div>
+                        <div id="password-success" class="mb-4 text-green-600 text-sm text-center hidden"></div>
+                        <div class="flex justify-end">
+                            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">修改密码</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 菜品使用 -->
+            <div id="use-dish" class="tab-content">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">使用菜品</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-lg font-medium mb-4 text-gray-800">菜品列表</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-100">
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">ID</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">名称</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">创建时间</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="use-dishes-body">
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
+                    
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-lg font-medium mb-4 text-gray-800">实时食材库存</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-100">
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">ID</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">名称</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">单位</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">库存</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">创建时间</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="real-time-ingredients-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 菜品详情模态框 -->
+        <div id="dish-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-40">
+            <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
+                <div id="dish-modal-content">
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 模态框 -->
-    <div id="dish-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+    <!-- 登录模态框 -->
+    <div id="login-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
-            <div id="dish-modal-content">
-                <!-- 菜品详情将通过htmx动态加载 -->
-            </div>
+            <h2 class="text-xl font-semibold mb-4 text-gray-800 text-center">食材与菜品管理系统</h2>
+            <p class="text-gray-600 text-center mb-6">请登录后使用</p>
+            <form id="login-form">
+                <div class="mb-4">
+                    <label for="login-username" class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+                    <input type="text" id="login-username" name="username" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="mb-6">
+                    <label for="login-password" class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                    <input type="password" id="login-password" name="password" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div id="login-error" class="mb-4 text-red-600 text-sm text-center hidden"></div>
+                <div class="flex justify-center">
+                    <button type="submit" class="px-8 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 w-full">登录</button>
+                </div>
+            </form>
+            <p class="text-gray-500 text-center text-sm mt-4">默认账户: admin / 123</p>
         </div>
     </div>
 
     <script>
-        // 切换标签页
+        const TOKEN_KEY = 'jwt_token';
+        let currentUser = null;
+
+        function getToken() {
+            return localStorage.getItem(TOKEN_KEY);
+        }
+
+        function setToken(token) {
+            localStorage.setItem(TOKEN_KEY, token);
+        }
+
+        function clearToken() {
+            localStorage.removeItem(TOKEN_KEY);
+        }
+
+        function getAuthHeaders() {
+            const token = getToken();
+            return token ? { 'Authorization': `Bearer ${token}` } : {};
+        }
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/auth/me', {
+                    headers: getAuthHeaders()
+                });
+                const data = await response.json();
+                if (data.authenticated) {
+                    currentUser = data.user;
+                    showMainContent();
+                } else {
+                    currentUser = null;
+                    clearToken();
+                    showLoginForm();
+                }
+            } catch (error) {
+                console.error('检查登录状态失败:', error);
+                currentUser = null;
+                clearToken();
+                showLoginForm();
+            }
+        }
+
+        function showMainContent() {
+            document.getElementById('main-content').classList.remove('hidden');
+            document.getElementById('login-modal').classList.add('hidden');
+            document.getElementById('current-username').textContent = currentUser.username;
+            loadIngredients();
+            loadDishes();
+            loadUseDishes();
+        }
+
+        function showLoginForm() {
+            document.getElementById('main-content').classList.add('hidden');
+            document.getElementById('login-modal').classList.remove('hidden');
+            document.getElementById('login-error').classList.add('hidden');
+            document.getElementById('login-form').reset();
+        }
+
+        async function login(username, password) {
+            try {
+                const response = await fetch('/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    if (data.token) {
+                        setToken(data.token);
+                    }
+                    currentUser = data.user;
+                    showMainContent();
+                } else {
+                    document.getElementById('login-error').textContent = data.error;
+                    document.getElementById('login-error').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('登录失败:', error);
+                document.getElementById('login-error').textContent = '登录失败，请稍后重试';
+                document.getElementById('login-error').classList.remove('hidden');
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch('/auth/logout', { method: 'POST' });
+            } catch (error) {
+                console.error('退出登录请求失败:', error);
+            }
+            clearToken();
+            currentUser = null;
+            showLoginForm();
+        }
+
         function switchTab(tabName) {
-            // 隐藏所有标签内容
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
             });
-            // 显示选中的标签内容
             document.getElementById(tabName).classList.add('active');
             
-            // 重置标签样式
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.classList.remove('bg-blue-100', 'text-blue-700');
                 btn.classList.add('bg-white', 'text-gray-900');
             });
-            // 设置当前标签样式
             event.target.classList.remove('bg-white', 'text-gray-900');
             event.target.classList.add('bg-blue-100', 'text-blue-700');
             
-            // 切换标签时更新对应的数据
             switch (tabName) {
                 case 'ingredients':
                     loadIngredients();
@@ -219,6 +362,8 @@
                     loadDishes();
                     loadIngredientsOptions();
                     break;
+                case 'password':
+                    break;
                 case 'use-dish':
                     loadUseDishes();
                     loadRealTimeIngredients();
@@ -226,12 +371,10 @@
             }
         }
 
-        // 加载食材列表
         function loadIngredients() {
             fetch('/ingredients-table')
                 .then(response => response.json())
                 .then(ingredients => {
-                    // 按照库存量从小到大排序
                     ingredients.sort((a, b) => a.quantity - b.quantity);
                     
                     let html = '';
@@ -259,7 +402,6 @@
                 .catch(error => console.error('加载食材列表失败:', error));
         }
 
-        // 加载菜品列表
         function loadDishes() {
             fetch('/dishes-table')
                 .then(response => response.json())
@@ -283,7 +425,6 @@
                 .catch(error => console.error('加载菜品列表失败:', error));
         }
 
-        // 加载菜品使用列表
         function loadUseDishes() {
             fetch('/use-dishes-table')
                 .then(response => response.json())
@@ -306,12 +447,10 @@
                 .catch(error => console.error('加载菜品使用列表失败:', error));
         }
 
-        // 加载实时食材列表
         function loadRealTimeIngredients() {
             fetch('/ingredients-table')
                 .then(response => response.json())
                 .then(ingredients => {
-                    // 按照库存量从小到大排序
                     ingredients.sort((a, b) => a.quantity - b.quantity);
                     
                     let html = '';
@@ -331,50 +470,37 @@
                 .catch(error => console.error('加载实时食材列表失败:', error));
         }
 
-        // 加载食材选项
-        // 存储食材信息的全局变量
         let ingredientsData = [];
 
         function loadIngredientsOptions() {
             fetch('/ingredients-options')
                 .then(response => response.json())
                 .then(ingredients => {
-                    // 保存食材数据到全局变量
                     ingredientsData = ingredients;
-                    // 更新所有食材选择框
                     const selects = document.querySelectorAll('[name^="ingredients["][name$="[ingredient_id]"]');
                     selects.forEach(select => {
-                        // 保存当前选中值
                         const currentValue = select.value;
-                        // 清除除了第一个空选项外的所有选项
                         while (select.children.length > 1) {
                             select.removeChild(select.lastChild);
                         }
-                        // 添加新的食材选项
                         let optionsHtml = '';
                         for (const ing of ingredients) {
                             optionsHtml += `<option value="${ing.id}">${ing.name}</option>`;
                         }
                         select.insertAdjacentHTML('beforeend', optionsHtml);
-                        // 恢复当前选中值
                         select.value = currentValue;
-                        // 触发change事件以更新单位显示
                         select.dispatchEvent(new Event('change'));
                     });
                 })
                 .catch(error => console.error('加载食材选项失败:', error));
         }
 
-        // 编辑食材函数
         function editIngredient(id) {
-            // 获取食材当前信息
             fetch(`/ingredients/${id}`)
                 .then(response => response.json())
                 .then(ingredient => {
-                    // 弹出编辑表单，只允许编辑数量
                     const newQuantity = prompt('请输入新的库存数量：', ingredient.quantity);
                     if (newQuantity !== null) {
-                        // 更新食材库存
                         fetch(`/ingredients/${id}`, {
                             method: 'PUT',
                             headers: {
@@ -382,12 +508,11 @@
                             },
                             body: JSON.stringify({ 
                                 quantity: parseInt(newQuantity), 
-                                unit: ingredient.unit // 保持原有单位不变
+                                unit: ingredient.unit
                             })
                         })
                         .then(response => {
                             if (response.ok) {
-                                // 重新加载食材列表
                                 loadIngredients();
                             } else {
                                 alert('更新失败');
@@ -397,7 +522,6 @@
                 });
         }
 
-        // 更新食材单位显示
         function updateIngredientUnit() {
             const select = this;
             const ingredientId = select.value;
@@ -415,20 +539,17 @@
             }
         }
 
-        // 页面加载完成后初始化
-        document.addEventListener('DOMContentLoaded', function() {
-            loadIngredients();
-            loadDishes();
-            loadUseDishes();
-            loadIngredientsOptions();
+        document.addEventListener('DOMContentLoaded', async function() {
+            await checkAuth();
             
-            // 为所有食材选择框添加change事件监听器
-            const selects = document.querySelectorAll('[name^="ingredients["][name$="[ingredient_id]"]');
-            selects.forEach(select => {
-                select.addEventListener('change', updateIngredientUnit);
+            const loginForm = document.getElementById('login-form');
+            loginForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const username = document.getElementById('login-username').value;
+                const password = document.getElementById('login-password').value;
+                login(username, password);
             });
             
-            // 处理添加食材表单提交
             const addIngredientForm = document.getElementById('add-ingredient-form');
             addIngredientForm.addEventListener('submit', function(e) {
                 e.preventDefault();
@@ -449,9 +570,7 @@
                 })
                 .then(response => {
                     if (response.ok) {
-                        // 重置表单
                         addIngredientForm.reset();
-                        // 重新加载食材列表
                         loadIngredients();
                     } else {
                         alert('添加失败');
@@ -463,7 +582,6 @@
                 });
             });
             
-            // 处理添加菜品表单提交
             const addDishForm = document.getElementById('add-dish-form');
             addDishForm.addEventListener('submit', function(e) {
                 e.preventDefault();
@@ -474,7 +592,6 @@
                     ingredients: []
                 };
                 
-                // 处理食材列表
                 const ingredientSelects = document.querySelectorAll('[name^="ingredients["]:not([name$="[quantity]"])');
                 ingredientSelects.forEach((select, index) => {
                     const ingredientId = select.value;
@@ -496,15 +613,12 @@
                 })
                 .then(response => {
                     if (response.ok) {
-                        // 重置表单
                         addDishForm.reset();
-                        // 清空食材列表
                         const container = document.getElementById('dish-ingredients-container');
                         container.innerHTML = `
                             <div class="flex gap-4 items-end">
                                 <select name="ingredients[0][ingredient_id]" required class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                                     <option value="">选择食材</option>
-                                    <option id="ingredients-options-0"></option>
                                 </select>
                                 <input type="number" name="ingredients[0][quantity]" min="1" value="1" placeholder="所需数量" class="w-24 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                                 <button type="button" class="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200" onclick="addDishIngredient()">+</button>
@@ -523,9 +637,64 @@
                     alert('添加失败');
                 });
             });
+            
+            const selects = document.querySelectorAll('[name^="ingredients["][name$="[ingredient_id]"]');
+            selects.forEach(select => {
+                select.addEventListener('change', updateIngredientUnit);
+            });
+
+            const passwordForm = document.getElementById('password-form');
+            passwordForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const currentPassword = document.getElementById('current-password').value;
+                const newPassword = document.getElementById('new-password').value;
+                const confirmPassword = document.getElementById('confirm-password').value;
+
+                document.getElementById('password-error').classList.add('hidden');
+                document.getElementById('password-success').classList.add('hidden');
+
+                if (newPassword !== confirmPassword) {
+                    document.getElementById('password-error').textContent = '两次输入的密码不一致';
+                    document.getElementById('password-error').classList.remove('hidden');
+                    return;
+                }
+
+                if (newPassword.length < 3) {
+                    document.getElementById('password-error').textContent = '新密码长度至少3个字符';
+                    document.getElementById('password-error').classList.remove('hidden');
+                    return;
+                }
+
+                fetch('/auth/change-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders()
+                    },
+                    body: JSON.stringify({
+                        oldPassword: currentPassword,
+                        newPassword: newPassword
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message === '密码修改成功') {
+                        document.getElementById('password-success').textContent = '密码修改成功';
+                        document.getElementById('password-success').classList.remove('hidden');
+                        passwordForm.reset();
+                    } else {
+                        document.getElementById('password-error').textContent = data.error || '修改失败';
+                        document.getElementById('password-error').classList.remove('hidden');
+                    }
+                })
+                .catch(error => {
+                    console.error('修改密码失败:', error);
+                    document.getElementById('password-error').textContent = '修改失败，请稍后重试';
+                    document.getElementById('password-error').classList.remove('hidden');
+                });
+            });
         });
 
-        // 添加菜品食材行
         let ingredientIndex = 1;
         function addDishIngredient() {
             const container = document.getElementById('dish-ingredients-container');
@@ -542,27 +711,22 @@
                 <button type="button" class="px-3 py-2 bg-red-100 text-red-700 rounded-md hover:bg-red-200" onclick="removeDishIngredient(this)">-</button>
             `;
             container.appendChild(newRow);
-            // 加载食材选项到新添加的选择框
             loadIngredientsOptions();
-            // 为新添加的选择框添加change事件监听器
             const select = newRow.querySelector('select');
             select.addEventListener('change', updateIngredientUnit);
             ingredientIndex++;
         }
 
-        // 删除菜品食材行
         function removeDishIngredient(btn) {
             btn.parentElement.remove();
         }
 
-        // 显示菜品详情模态框
         function showDishModal(dishId) {
             const modal = document.getElementById('dish-modal');
             const content = document.getElementById('dish-modal-content');
             content.innerHTML = '<div class="text-center py-8">加载中...</div>';
             modal.classList.remove('hidden');
             
-            // 使用htmx加载菜品详情
             fetch(`/dishes/${dishId}`)
                 .then(response => response.json())
                 .then(data => {
@@ -589,12 +753,10 @@
                 });
         }
 
-        // 关闭菜品详情模态框
         function closeDishModal() {
             document.getElementById('dish-modal').classList.add('hidden');
         }
 
-        // 删除食材
         function deleteIngredient(id) {
             if (confirm('确定要删除这个食材吗？')) {
                 fetch(`/ingredients/${id}`, {
@@ -614,7 +776,6 @@
             }
         }
 
-        // 食材补货函数
         function restockIngredient(id) {
             const restockInput = document.getElementById(`restock-${id}`);
             const restockQuantity = parseInt(restockInput.value);
@@ -624,13 +785,11 @@
                 return;
             }
             
-            // 获取当前食材信息
             fetch(`/ingredients/${id}`)
                 .then(response => response.json())
                 .then(ingredient => {
                     const newQuantity = ingredient.quantity + restockQuantity;
                     
-                    // 更新食材库存
                     return fetch(`/ingredients/${id}`, {
                         method: 'PUT',
                         headers: {
@@ -638,13 +797,12 @@
                         },
                         body: JSON.stringify({ 
                             quantity: newQuantity, 
-                            unit: ingredient.unit // 保持原有单位不变
+                            unit: ingredient.unit
                         })
                     });
                 })
                 .then(response => {
                     if (response.ok) {
-                        // 重新加载食材列表
                         loadIngredients();
                     } else {
                         alert('补货失败');
@@ -656,7 +814,6 @@
                 });
         }
 
-        // 删除菜品
         function deleteDish(id) {
             if (confirm('确定要删除这个菜品吗？')) {
                 fetch(`/dishes/${id}`, {
@@ -677,7 +834,6 @@
             }
         }
 
-        // 使用菜品
         function useDish(id) {
             fetch(`/dishes/${id}/use`, {
                 method: 'POST'
@@ -687,11 +843,10 @@
                 if (data.error) {
                     alert(data.error);
                 } else {
-                    // 更新食材、菜品和使用列表
                     loadIngredients();
                     loadDishes();
                     loadUseDishes();
-                    loadRealTimeIngredients(); // 更新实时食材列表
+                    loadRealTimeIngredients();
                     alert('菜品使用成功！');
                 }
             })

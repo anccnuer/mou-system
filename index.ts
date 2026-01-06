@@ -1,11 +1,49 @@
 import { Elysia, t } from 'elysia';
-import { db, initDatabase } from './src/db';
+import { jwt } from '@elysiajs/jwt';
+import { db, initDatabase, createUser, getUserByUsername, getUserById, getUserByIdWithPassword, adminUserExists, createDefaultAdminUser, updateUserPassword } from './src/db';
 import { join } from 'path';
+import { scrypt, randomBytes } from 'crypto';
+import { promisify } from 'util';
+
+const scryptAsync = promisify(scrypt);
+
+const JWT_SECRET = 'your-super-secret-jwt-key-change-in-production';
+const JWT_EXPIRY = '7d';
+
+async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16).toString('hex');
+  const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `${salt}:${derivedKey.toString('hex')}`;
+}
+
+async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+  const [salt, key] = storedHash.split(':');
+  const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
+  return key === derivedKey.toString('hex');
+}
 
 // 初始化数据库
 initDatabase();
 
+// 创建默认管理员用户
+async function initDefaultAdmin() {
+  const existingAdmin = adminUserExists();
+  if (!existingAdmin) {
+    const adminPasswordHash = await hashPassword('123');
+    createDefaultAdminUser(adminPasswordHash);
+    console.log('默认管理员账户已创建: admin / 123');
+  }
+}
+initDefaultAdmin();
+
 const app = new Elysia()
+  .use(
+    jwt({
+      name: 'jwt',
+      secret: JWT_SECRET,
+      exp: JWT_EXPIRY
+    })
+  )
   // 根路由返回HTML页面
   .get('/', () => {
     return new Response(Bun.file(join(process.cwd(), 'public', 'index.html')), {
@@ -26,6 +64,147 @@ const app = new Elysia()
         return new Response('Not Found', { status: 404 });
       }
     });
+  })
+
+  // 获取当前用户状态
+  .get('/auth/me', async ({ jwt, request }) => {
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
+
+    if (!token) {
+      return { authenticated: false };
+    }
+
+    const payload = await jwt.verify(token);
+    if (!payload) {
+      return { authenticated: false };
+    }
+
+    return {
+      authenticated: true,
+      user: {
+        id: payload.sub,
+        username: payload.username
+      }
+    };
+  })
+
+  // 用户登录
+  .post('/auth/login', async ({ body, jwt }) => {
+    const { username, password } = body as { username: string; password: string };
+
+    if (!username || !password) {
+      return new Response(JSON.stringify({ error: '用户名和密码不能为空' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const user = getUserByUsername(username);
+    if (!user) {
+      return new Response(JSON.stringify({ error: '用户名或密码错误' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const isValid = await verifyPassword(password, user.password);
+    if (!isValid) {
+      return new Response(JSON.stringify({ error: '用户名或密码错误' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const userWithoutPassword = {
+      id: user.id,
+      username: user.username
+    };
+
+    const token = await jwt.sign({
+      sub: user.id,
+      username: user.username
+    });
+
+    return {
+      message: '登录成功',
+      user: userWithoutPassword,
+      token
+    };
+  }, {
+    body: t.Object({
+      username: t.String(),
+      password: t.String()
+    })
+  })
+
+  // 用户登出
+  .post('/auth/logout', () => {
+    return { message: '登出成功' };
+  })
+
+  // 修改密码
+  .post('/auth/change-password', async ({ request, body, jwt }) => {
+    const { oldPassword, newPassword } = body as { oldPassword: string; newPassword: string };
+
+    if (!oldPassword || !newPassword) {
+      return new Response(JSON.stringify({ error: '原密码和新密码不能为空' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (newPassword.length < 3) {
+      return new Response(JSON.stringify({ error: '新密码长度至少3个字符' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
+
+    if (!token) {
+      return new Response(JSON.stringify({ error: '未登录' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const payload = await jwt.verify(token);
+    if (!payload) {
+      return new Response(JSON.stringify({ error: '登录已过期' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const userId = Number(payload.sub);
+    const user = getUserByIdWithPassword(userId);
+    if (!user) {
+      return new Response(JSON.stringify({ error: '用户不存在' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const isValid = await verifyPassword(oldPassword, user.password);
+    if (!isValid) {
+      return new Response(JSON.stringify({ error: '原密码错误' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const newPasswordHash = await hashPassword(newPassword);
+    updateUserPassword(user.id, newPasswordHash);
+
+    return { message: '密码修改成功' };
+  }, {
+    body: t.Object({
+      oldPassword: t.String(),
+      newPassword: t.String()
+    })
   })
 
   // 食材管理 API
