@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>食材与菜品管理系统</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -170,6 +171,38 @@
 
             <!-- 菜品使用 -->
             <div id="use-dish" class="tab-content">
+                <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">批量使用菜品</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">上传Excel文件</label>
+                            <input type="file" id="excel-file" accept=".xlsx,.xls" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                            <p class="text-sm text-gray-500 mt-1">Excel格式：菜品名 | 数量（一行一个菜品）</p>
+                        </div>
+                        
+                        <div id="excel-preview" class="hidden">
+                            <h3 class="text-lg font-medium mb-2 text-gray-800">解析预览</h3>
+                            <div class="overflow-x-auto mb-4">
+                                <table class="w-full border-collapse">
+                                    <thead>
+                                        <tr class="bg-gray-100">
+                                            <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">菜品名称</th>
+                                            <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">使用数量</th>
+                                            <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">状态</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="preview-body"></tbody>
+                                </table>
+                            </div>
+                            <div id="excel-error" class="hidden mb-4 p-3 bg-red-100 text-red-700 rounded-md"></div>
+                            <div class="flex justify-end gap-3">
+                                <button onclick="clearExcelUpload()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">清除</button>
+                                <button id="submit-batch-btn" onclick="submitBatchUse()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">确认使用</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <h2 class="text-xl font-semibold mb-4 text-gray-800">使用菜品</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="bg-white rounded-lg shadow-md p-6">
@@ -181,6 +214,7 @@
                                         <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">ID</th>
                                         <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">名称</th>
                                         <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">创建时间</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">数量</th>
                                         <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">操作</th>
                                     </tr>
                                 </thead>
@@ -436,6 +470,9 @@
                                 <td class="px-4 py-2 border-b">${dish.id}</td>
                                 <td class="px-4 py-2 border-b">${dish.name}</td>
                                 <td class="px-4 py-2 border-b">${dish.created_at}</td>
+                                <td class="px-4 py-2 border-b">
+                                    <input type="number" id="dish-qty-${dish.id}" min="1" value="1" class="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                                </td>
                                 <td class="px-4 py-2 border-b">
                                     <button class="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm" onclick="useDish(${dish.id})">使用</button>
                                 </td>
@@ -693,6 +730,12 @@
                     document.getElementById('password-error').classList.remove('hidden');
                 });
             });
+            
+            document.getElementById('excel-file').addEventListener('change', handleExcelUpload);
+            
+            const submitBtn = document.getElementById('submit-batch-btn');
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
         });
 
         let ingredientIndex = 1;
@@ -735,7 +778,7 @@
                         ingredientsHtml = '<h3 class="text-lg font-medium mb-2 text-gray-800">所需食材：</h3>';
                         ingredientsHtml += '<ul class="list-disc list-inside mb-4 space-y-1">';
                         data.ingredients.forEach(ing => {
-                            ingredientsHtml += `<li>${ing.name}：${ing.quantity}</li>`;
+                            ingredientsHtml += `<li>${ing.name}：${ing.quantity} ${ing.unit}</li>`;
                         });
                         ingredientsHtml += '</ul>';
                     }
@@ -835,7 +878,15 @@
         }
 
         function useDish(id) {
-            fetch(`/dishes/${id}/use`, {
+            const quantityInput = document.getElementById(`dish-qty-${id}`);
+            const quantity = parseInt(quantityInput.value);
+            
+            if (isNaN(quantity) || quantity <= 0) {
+                alert('请输入有效的数量');
+                return;
+            }
+            
+            fetch(`/dishes/${id}/use?quantity=${quantity}`, {
                 method: 'POST'
             })
             .then(response => response.json())
@@ -854,6 +905,140 @@
                 console.error('使用菜品失败:', error);
                 alert('使用菜品失败');
             });
+        }
+        
+        let excelData = [];
+        
+        function handleExcelUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    
+                    excelData = [];
+                    const previewBody = document.getElementById('preview-body');
+                    previewBody.innerHTML = '';
+                    
+                    for (let i = 0; i < jsonData.length; i++) {
+                        const row = jsonData[i];
+                        if (row.length >= 2) {
+                            const dishName = String(row[0]).trim();
+                            const quantity = parseInt(row[1]);
+                            
+                            if (dishName && !isNaN(quantity) && quantity > 0) {
+                                excelData.push({ name: dishName, quantity });
+                            }
+                        }
+                    }
+                    
+                    if (excelData.length === 0) {
+                        showExcelError('未找到有效的菜品数据');
+                        return;
+                    }
+                    
+                    excelData.forEach(item => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td class="px-4 py-2 border-b">${item.name}</td>
+                            <td class="px-4 py-2 border-b">${item.quantity}</td>
+                            <td class="px-4 py-2 border-b text-gray-500">待处理</td>
+                        `;
+                        previewBody.appendChild(tr);
+                    });
+                    
+                    document.getElementById('excel-preview').classList.remove('hidden');
+                    document.getElementById('excel-error').classList.add('hidden');
+                    
+                    const submitBtn = document.getElementById('submit-batch-btn');
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    
+                } catch (error) {
+                    showExcelError('解析Excel文件失败：' + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        
+        function showExcelError(message) {
+            const errorDiv = document.getElementById('excel-error');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+            document.getElementById('excel-preview').classList.add('hidden');
+        }
+        
+        function clearExcelUpload() {
+            document.getElementById('excel-file').value = '';
+            document.getElementById('excel-preview').classList.add('hidden');
+            document.getElementById('excel-error').classList.add('hidden');
+            excelData = [];
+            
+            const submitBtn = document.getElementById('submit-batch-btn');
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+        
+        async function submitBatchUse() {
+            const previewBody = document.getElementById('preview-body');
+            const rows = previewBody.querySelectorAll('tr');
+            const submitBtn = document.getElementById('submit-batch-btn');
+            
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            
+            try {
+                const response = await fetch('/dishes/batch-use', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ dishes: excelData })
+                });
+                
+                console.log('Response status:', response.status);
+                const result = await response.json();
+                console.log('Result:', result);
+                
+                if (!result.results) {
+                    throw new Error('返回数据格式错误: ' + JSON.stringify(result));
+                }
+                
+                let successCount = 0;
+                let failCount = 0;
+                
+                result.results.forEach((item, index) => {
+                    const row = rows[index];
+                    const statusCell = row.cells[2];
+                    
+                    if (item.success) {
+                        statusCell.textContent = '成功';
+                        statusCell.className = 'px-4 py-2 border-b text-green-600';
+                        successCount++;
+                    } else {
+                        statusCell.textContent = item.error;
+                        statusCell.className = 'px-4 py-2 border-b text-red-600';
+                        failCount++;
+                    }
+                });
+                
+                loadIngredients();
+                loadDishes();
+                loadUseDishes();
+                loadRealTimeIngredients();
+                
+                alert(`处理完成！成功：${successCount}，失败：${failCount}`);
+                
+            } catch (error) {
+                console.error('批量使用失败:', error);
+                alert('批量使用失败: ' + error.message);
+            }
         }
     </script>
 </body>

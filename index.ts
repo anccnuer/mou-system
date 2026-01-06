@@ -290,7 +290,7 @@ const app = new Elysia()
     }
 
     const ingredients = db.prepare(`
-      SELECT i.id, i.name, di.quantity
+      SELECT i.id, i.name, i.unit, di.quantity
       FROM dish_ingredients di
       JOIN ingredients i ON di.ingredient_id = i.id
       WHERE di.dish_id = ?
@@ -359,8 +359,11 @@ const app = new Elysia()
   })
 
   // 使用菜品，减少食材库存
-  .post('/dishes/:id/use', ({ params }) => {
+  .post('/dishes/:id/use', ({ params, query }) => {
     const { id } = params;
+    const quantity = parseInt(query.quantity || '1');
+    
+    console.log('收到使用菜品请求:', { id, query, quantity });
     
     // 检查菜品是否存在
     const dish = db.prepare('SELECT * FROM dishes WHERE id = ?').get(id);
@@ -393,16 +396,19 @@ const app = new Elysia()
       return { error: '该菜品所需的某些食材已被删除，无法使用' };
     }
 
-    // 检查食材库存是否足够
+    // 检查食材库存是否足够（考虑使用数量）
     for (const ing of ingredients) {
-      if (ing.current_quantity < ing.required_quantity) {
-        return { error: `${ing.name} 库存不足，当前库存: ${ing.current_quantity}，所需: ${ing.required_quantity}` };
+      const totalNeeded = ing.required_quantity * quantity;
+      if (ing.current_quantity < totalNeeded) {
+        return { error: `${ing.name} 库存不足，需要 ${totalNeeded}，当前库存: ${ing.current_quantity}` };
       }
     }
 
-    // 减少食材库存
+    // 减少食材库存（考虑使用数量）
     for (const ing of ingredients) {
-      db.prepare('UPDATE ingredients SET quantity = quantity - ? WHERE id = ?').run(ing.required_quantity, ing.id);
+      const totalQuantity = ing.required_quantity * quantity;
+      console.log(`减少食材 ${ing.name} 库存: ${ing.current_quantity} - ${totalQuantity}`);
+      db.prepare('UPDATE ingredients SET quantity = quantity - ? WHERE id = ?').run(totalQuantity, ing.id);
     }
 
     // 返回更新后的菜品信息和食材库存
@@ -420,6 +426,63 @@ const app = new Elysia()
   }, {
     params: t.Object({
       id: t.String()
+    }),
+    query: t.Object({
+      quantity: t.Optional(t.String())
+    })
+  })
+
+  // 批量使用菜品
+  .post('/dishes/batch-use', async ({ body }) => {
+    const { dishes } = body as { dishes: Array<{ name: string; quantity: number }> };
+    const results = [];
+    
+    for (const item of dishes) {
+      const dish = db.prepare('SELECT * FROM dishes WHERE name = ?').get(item.name);
+      if (!dish) {
+        results.push({ name: item.name, success: false, error: '菜品不存在' });
+        continue;
+      }
+      
+      const ingredients = db.prepare(`
+        SELECT i.id, i.name, i.quantity AS current_quantity, di.quantity AS required_quantity
+        FROM dish_ingredients di
+        JOIN ingredients i ON di.ingredient_id = i.id
+        WHERE di.dish_id = ?
+      `).all(dish.id);
+      
+      if (ingredients.length === 0) {
+        results.push({ name: item.name, success: false, error: '该菜品没有配置食材' });
+        continue;
+      }
+      
+      for (const ing of ingredients) {
+        const totalNeeded = ing.required_quantity * item.quantity;
+        if (ing.current_quantity < totalNeeded) {
+          results.push({ 
+            name: item.name, 
+            success: false, 
+            error: `${ing.name} 库存不足，需要 ${totalNeeded}，当前 ${ing.current_quantity}` 
+          });
+          continue;
+        }
+      }
+      
+      for (const ing of ingredients) {
+        db.prepare('UPDATE ingredients SET quantity = quantity - ? WHERE id = ?')
+          .run(ing.required_quantity * item.quantity, ing.id);
+      }
+      
+      results.push({ name: item.name, success: true });
+    }
+    
+    return { results };
+  }, {
+    body: t.Object({
+      dishes: t.Array(t.Object({
+        name: t.String(),
+        quantity: t.Number()
+      }))
     })
   })
 

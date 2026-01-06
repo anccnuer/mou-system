@@ -124,6 +124,21 @@
             margin-bottom: 12px;
         }
         
+        .dish-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .qty-input {
+            width: 80px;
+            padding: 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 16px;
+            text-align: center;
+        }
+        
         .btn {
             padding: 10px 16px;
             border: none;
@@ -137,7 +152,7 @@
         .btn-primary {
             background-color: #3b82f6;
             color: #fff;
-            width: 100%;
+            flex: 1;
         }
         
         .btn-primary:hover {
@@ -271,7 +286,10 @@
                             <div class="dish-item">
                                 <div class="dish-name">${dish.name}</div>
                                 <div class="dish-info">创建时间: ${dish.created_at}</div>
-                                <button class="btn btn-primary" onclick="useDish(${dish.id})">使用</button>
+                                <div class="dish-actions">
+                                    <input type="number" id="dish-qty-${dish.id}" min="1" value="1" class="qty-input" placeholder="数量">
+                                    <button class="btn btn-primary" onclick="useDish(${dish.id})">使用</button>
+                                </div>
                             </div>
                         `;
                     }
@@ -352,8 +370,16 @@
         
         // 使用菜品后重新加载食材库存
         function useDish(id) {
-            if (confirm('确定要使用该菜品吗？')) {
-                fetch(`${API_BASE_URL}/dishes/${id}/use`, {
+            const quantityInput = document.getElementById(`dish-qty-${id}`);
+            const quantity = parseInt(quantityInput.value);
+            
+            if (isNaN(quantity) || quantity <= 0) {
+                showMessage('请输入有效的数量', 'error');
+                return;
+            }
+            
+            if (confirm(`确定要使用 ${quantity} 份该菜品吗？`)) {
+                fetch(`${API_BASE_URL}/dishes/${id}/use?quantity=${quantity}`, {
                     method: 'POST'
                 })
                 .then(response => response.json())
