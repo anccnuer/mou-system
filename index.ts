@@ -1,6 +1,6 @@
 import { Elysia, t } from 'elysia';
 import { jwt } from '@elysiajs/jwt';
-import { db, initDatabase, createUser, getUserByUsername, getUserById, getUserByIdWithPassword, adminUserExists, createDefaultAdminUser, updateUserPassword, getAllStores, createStore, deleteStore, getStoreById, createOperationLog, getOperationLogs, getOperationLogById, revokeOperation } from './src/db';
+import { db, initDatabase, createUser, getUserByUsername, getUserById, getUserByIdWithPassword, adminUserExists, createDefaultAdminUser, updateUserPassword, getAllStores, createStore, deleteStore, getStoreById, createOperationLog, getOperationLogs, getOperationLogById, revokeOperation, getAllUsers, createUserWithRole, deleteUser } from './src/db';
 import { join } from 'path';
 import { scrypt, randomBytes } from 'crypto';
 import { promisify } from 'util';
@@ -84,7 +84,8 @@ const app = new Elysia()
       authenticated: true,
       user: {
         id: payload.sub,
-        username: payload.username
+        username: payload.username,
+        role: payload.role
       }
     };
   })
@@ -118,12 +119,14 @@ const app = new Elysia()
 
     const userWithoutPassword = {
       id: user.id,
-      username: user.username
+      username: user.username,
+      role: user.role
     };
 
     const token = await jwt.sign({
       sub: user.id,
-      username: user.username
+      username: user.username,
+      role: user.role
     });
 
     return {
@@ -204,6 +207,132 @@ const app = new Elysia()
     body: t.Object({
       oldPassword: t.String(),
       newPassword: t.String()
+    })
+  })
+
+  // 用户管理 API（仅admin可访问）
+  // 获取所有用户
+  .get('/users', async ({ jwt, request }) => {
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
+
+    if (!token) {
+      return new Response(JSON.stringify({ error: '未登录' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const payload = await jwt.verify(token);
+    if (!payload || payload.role !== 'admin') {
+      return new Response(JSON.stringify({ error: '无权限访问' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const users = getAllUsers();
+    return users;
+  })
+
+  // 创建新用户
+  .post('/users', async ({ body, jwt, request }) => {
+    const { username, password, role } = body as { username: string; password: string; role?: string };
+
+    if (!username || !password) {
+      return new Response(JSON.stringify({ error: '用户名和密码不能为空' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (password.length < 3) {
+      return new Response(JSON.stringify({ error: '密码长度至少3个字符' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
+
+    if (!token) {
+      return new Response(JSON.stringify({ error: '未登录' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const payload = await jwt.verify(token);
+    if (!payload || payload.role !== 'admin') {
+      return new Response(JSON.stringify({ error: '无权限访问' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const existingUser = getUserByUsername(username);
+    if (existingUser) {
+      return new Response(JSON.stringify({ error: '用户名已存在' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const passwordHash = await hashPassword(password);
+    const user = createUserWithRole(username, passwordHash, role || 'user');
+
+    return user;
+  }, {
+    body: t.Object({
+      username: t.String(),
+      password: t.String(),
+      role: t.Optional(t.Union([t.Literal('admin'), t.Literal('user')]))
+    })
+  })
+
+  // 删除用户
+  .delete('/users/:id', async ({ params, jwt, request }) => {
+    const { id } = params;
+    const userId = parseInt(id);
+
+    if (userId === 1) {
+      return new Response(JSON.stringify({ error: '默认管理员不能删除' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
+
+    if (!token) {
+      return new Response(JSON.stringify({ error: '未登录' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const payload = await jwt.verify(token);
+    if (!payload || payload.role !== 'admin') {
+      return new Response(JSON.stringify({ error: '无权限访问' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const result = deleteUser(userId);
+    if (result.changes === 0) {
+      return new Response(JSON.stringify({ error: '用户不存在' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    return { message: '用户删除成功' };
+  }, {
+    params: t.Object({
+      id: t.String()
     })
   })
 

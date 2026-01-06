@@ -306,6 +306,48 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- 用户管理（仅admin可见） -->
+                <div id="user-management" class="bg-white rounded-lg shadow-md p-6 mt-6 hidden">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">添加新用户</h2>
+                    <form id="add-user-form" class="flex gap-4 mb-6">
+                        <div class="flex-1">
+                            <label for="user-username" class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+                            <input type="text" id="user-username" name="username" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="flex-1">
+                            <label for="user-password" class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                            <input type="password" id="user-password" name="password" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="w-32">
+                            <label for="user-role" class="block text-sm font-medium text-gray-700 mb-1">角色</label>
+                            <select id="user-role" name="role" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="user">普通用户</option>
+                                <option value="admin">管理员</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end">
+                            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">添加</button>
+                        </div>
+                    </form>
+
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">用户列表</h2>
+                    <div id="users-list" class="overflow-x-auto">
+                        <table class="w-full border-collapse">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">ID</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">用户名</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">角色</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">创建时间</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -445,6 +487,115 @@
             }
         }
 
+        function loadUsers() {
+            if (currentUser && currentUser.role === 'admin') {
+                document.getElementById('user-management').classList.remove('hidden');
+                fetch('/users', {
+                    headers: getAuthHeaders()
+                })
+                .then(response => response.json())
+                .then(users => {
+                    let html = '';
+                    for (const user of users) {
+                        const roleText = user.role === 'admin' ? '管理员' : '普通用户';
+                        const deleteButton = user.id === 1 ? 
+                            '<span class="text-gray-400 text-sm">不可删除</span>' : 
+                            `<button class="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm" onclick="deleteUser(${user.id})">删除</button>`;
+                        
+                        html += `
+                            <tr>
+                                <td class="px-4 py-2 border-b">${user.id}</td>
+                                <td class="px-4 py-2 border-b">${user.username}</td>
+                                <td class="px-4 py-2 border-b">${roleText}</td>
+                                <td class="px-4 py-2 border-b">${user.created_at}</td>
+                                <td class="px-4 py-2 border-b">
+                                    ${deleteButton}
+                                </td>
+                            </tr>
+                        `;
+                    }
+                    document.getElementById('users-body').innerHTML = html;
+                })
+                .catch(error => {
+                    console.error('加载用户列表失败:', error);
+                    if (error.message && error.message.includes('403')) {
+                        document.getElementById('user-management').classList.add('hidden');
+                    }
+                });
+            } else {
+                document.getElementById('user-management').classList.add('hidden');
+            }
+        }
+
+        function addUser() {
+            const username = document.getElementById('user-username').value;
+            const password = document.getElementById('user-password').value;
+            const role = document.getElementById('user-role').value;
+
+            if (!username || !password) {
+                alert('用户名和密码不能为空');
+                return;
+            }
+
+            if (password.length < 3) {
+                alert('密码长度至少3个字符');
+                return;
+            }
+
+            fetch('/users', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify({ username, password, role })
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    return response.json().then(data => {
+                        throw new Error(data.error || '添加失败');
+                    });
+                }
+            })
+            .then(data => {
+                document.getElementById('add-user-form').reset();
+                loadUsers();
+                alert('用户添加成功！');
+            })
+            .catch(error => {
+                console.error('添加用户失败:', error);
+                alert(error.message || '添加失败');
+            });
+        }
+
+        function deleteUser(id) {
+            if (confirm('确定要删除这个用户吗？')) {
+                fetch(`/users/${id}`, {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                })
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    } else {
+                        return response.json().then(data => {
+                            throw new Error(data.error || '删除失败');
+                        });
+                    }
+                })
+                .then(data => {
+                    loadUsers();
+                    alert('用户删除成功！');
+                })
+                .catch(error => {
+                    console.error('删除用户失败:', error);
+                    alert(error.message || '删除失败');
+                });
+            }
+        }
+
         async function checkAuth() {
             try {
                 const response = await fetch('/auth/me', {
@@ -552,6 +703,7 @@
                     break;
                 case 'settings':
                     loadStoresList();
+                    loadUsers();
                     break;
             }
         }
@@ -916,6 +1068,12 @@
                     console.error('添加店铺失败:', error);
                     alert('添加失败');
                 });
+            });
+
+            const addUserForm = document.getElementById('add-user-form');
+            addUserForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                addUser();
             });
             
             document.getElementById('excel-file').addEventListener('change', handleExcelUpload);

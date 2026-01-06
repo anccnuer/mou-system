@@ -56,6 +56,7 @@ export function initDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'user',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
@@ -92,6 +93,16 @@ export function initDatabase() {
   } catch (e) {
     console.log('数据迁移完成或无需迁移');
   }
+
+  // 迁移用户数据：为没有 role 的用户设置默认角色
+  try {
+    db.exec(`
+      UPDATE users SET role = 'admin' WHERE username = 'admin' AND role IS NULL;
+      UPDATE users SET role = 'user' WHERE role IS NULL OR role = '';
+    `);
+  } catch (e) {
+    console.log('用户角色迁移完成或无需迁移');
+  }
 }
 
 // 用户注册
@@ -107,7 +118,7 @@ export function getUserByUsername(username: string): any {
 
 // 根据用户ID获取用户
 export function getUserById(id: number): any {
-  return db.prepare('SELECT id, username, created_at FROM users WHERE id = ?').get(id);
+  return db.prepare('SELECT id, username, role, created_at FROM users WHERE id = ?').get(id);
 }
 
 // 根据用户ID获取用户（包括密码）
@@ -117,8 +128,8 @@ export function getUserByIdWithPassword(id: number): any {
 
 // 创建默认管理员用户
 export function createDefaultAdminUser(passwordHash: string): any {
-  const result = db.prepare('INSERT INTO users (username, password) VALUES (?, ?)').run('admin', passwordHash);
-  return { id: result.lastInsertRowid, username: 'admin' };
+  const result = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)').run('admin', passwordHash, 'admin');
+  return { id: result.lastInsertRowid, username: 'admin', role: 'admin' };
 }
 
 // 检查是否存在管理员用户
@@ -184,4 +195,19 @@ export function revokeOperation(logId: number, revokedBy: number): any {
   const revokedTime = new Date().toISOString();
   db.prepare('UPDATE operation_logs SET is_revoked = 1, revoked_time = ?, revoked_by = ? WHERE id = ?').run(revokedTime, revokedBy, logId);
   return { success: true, log };
+}
+
+// 用户管理函数
+export function getAllUsers(): any {
+  return db.prepare('SELECT id, username, role, created_at FROM users ORDER BY id').all();
+}
+
+export function createUserWithRole(username: string, passwordHash: string, role: string = 'user'): any {
+  const result = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)').run(username, passwordHash, role);
+  return { id: result.lastInsertRowid, username, role };
+}
+
+export function deleteUser(userId: number): any {
+  const result = db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+  return { changes: result.changes };
 }
