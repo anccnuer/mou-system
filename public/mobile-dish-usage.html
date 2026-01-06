@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="description" content="菜品使用移动端PWA应用">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/icon-192x192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>移动端菜品使用</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 16px;
+        }
+        
+        /* 标签页样式 */
+        .tab-container {
+            display: flex;
+            margin-bottom: 16px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            border: none;
+            background-color: transparent;
+            font-size: 16px;
+            font-weight: 500;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .tab-btn.active {
+            background-color: #3b82f6;
+            color: #fff;
+        }
+        
+        .tab-content {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 16px;
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #1e293b;
+            text-align: center;
+        }
+        
+        .ingredient-item {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .ingredient-name {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: #374151;
+        }
+        
+        .ingredient-stock {
+            font-size: 14px;
+            color: #64748b;
+        }
+        
+        h1 {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 24px;
+            color: #1e40af;
+        }
+        
+        .dish-item {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .dish-name {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #1e293b;
+        }
+        
+        .dish-info {
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 12px;
+        }
+        
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background-color: #3b82f6;
+            color: #fff;
+            width: 100%;
+        }
+        
+        .btn-primary:hover {
+            background-color: #2563eb;
+        }
+        
+        .btn-primary:active {
+            background-color: #1d4ed8;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .message {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+        
+        .message-success {
+            background-color: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+        
+        .message-error {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 480px) {
+            .container {
+                padding: 12px;
+            }
+            
+            h1 {
+                font-size: 20px;
+                margin-bottom: 16px;
+            }
+            
+            .dish-item {
+                padding: 12px;
+            }
+            
+            .dish-name {
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>菜品使用</h1>
+        <div id="message-container"></div>
+        <div class="tab-container">
+            <button class="tab-btn active" onclick="switchTab('dishes')">菜品列表</button>
+            <button class="tab-btn" onclick="switchTab('ingredients')">食材库存</button>
+        </div>
+        
+        <div id="dishes" class="tab-content active">
+            <h2 class="section-title">菜品列表</h2>
+            <div id="dish-list"></div>
+        </div>
+        
+        <div id="ingredients" class="tab-content">
+            <h2 class="section-title">食材库存</h2>
+            <div id="ingredient-list"></div>
+        </div>
+    </div>
+    
+    <script>
+        // API基础URL
+        const API_BASE_URL = '';
+        
+        // 切换标签页
+        function switchTab(tabName) {
+            // 隐藏所有标签内容
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // 显示选中的标签内容
+            document.getElementById(tabName).classList.add('active');
+            
+            // 重置标签样式
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // 设置当前标签样式
+            event.target.classList.add('active');
+        }
+        
+        // 显示消息
+        function showMessage(message, type) {
+            const container = document.getElementById('message-container');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message message-${type}`;
+            messageDiv.textContent = message;
+            container.appendChild(messageDiv);
+            
+            // 3秒后自动移除消息
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 3000);
+        }
+        
+        // 加载菜品列表
+        function loadDishes() {
+            const dishList = document.getElementById('dish-list');
+            dishList.innerHTML = '<div class="loading">加载中...</div>';
+            
+            fetch(`${API_BASE_URL}/use-dishes-table`)
+                .then(response => response.json())
+                .then(dishes => {
+                    if (dishes.length === 0) {
+                        dishList.innerHTML = '<div class="loading">暂无菜品数据</div>';
+                        return;
+                    }
+                    
+                    let html = '';
+                    for (const dish of dishes) {
+                        html += `
+                            <div class="dish-item">
+                                <div class="dish-name">${dish.name}</div>
+                                <div class="dish-info">创建时间: ${dish.created_at}</div>
+                                <button class="btn btn-primary" onclick="useDish(${dish.id})">使用</button>
+                            </div>
+                        `;
+                    }
+                    dishList.innerHTML = html;
+                })
+                .catch(error => {
+                    console.error('加载菜品列表失败:', error);
+                    dishList.innerHTML = '<div class="loading">加载失败，请重试</div>';
+                });
+        }
+        
+
+        
+        // 加载食材库存，按照库存量从少到多排列
+        function loadIngredients() {
+            const ingredientList = document.getElementById('ingredient-list');
+            ingredientList.innerHTML = '<div class="loading">加载中...</div>';
+            
+            fetch(`${API_BASE_URL}/ingredients-table`)
+                .then(response => response.json())
+                .then(ingredients => {
+                    if (ingredients.length === 0) {
+                        ingredientList.innerHTML = '<div class="loading">暂无食材数据</div>';
+                        return;
+                    }
+                    
+                    // 按照库存量从少到多排序
+                    ingredients.sort((a, b) => a.quantity - b.quantity);
+                    
+                    let html = '';
+                    for (const ing of ingredients) {
+                        html += `
+                            <div class="ingredient-item">
+                                <div class="ingredient-name">${ing.name}</div>
+                                <div class="ingredient-stock">库存: ${ing.quantity} ${ing.unit || ''}</div>
+                            </div>
+                        `;
+                    }
+                    ingredientList.innerHTML = html;
+                })
+                .catch(error => {
+                    console.error('加载食材库存失败:', error);
+                    ingredientList.innerHTML = '<div class="loading">加载失败，请重试</div>';
+                });
+        }
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 只加载当前激活标签页的内容
+            loadDishes();
+        });
+        
+        // 切换标签页
+        function switchTab(tabName) {
+            // 隐藏所有标签内容
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // 显示选中的标签内容
+            document.getElementById(tabName).classList.add('active');
+            
+            // 重置标签样式
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // 设置当前标签样式
+            event.target.classList.add('active');
+            
+            // 加载对应标签页的内容
+            if (tabName === 'dishes') {
+                loadDishes();
+            } else if (tabName === 'ingredients') {
+                loadIngredients();
+            }
+        }
+        
+        // 使用菜品后重新加载食材库存
+        function useDish(id) {
+            if (confirm('确定要使用该菜品吗？')) {
+                fetch(`${API_BASE_URL}/dishes/${id}/use`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        showMessage(data.error, 'error');
+                    } else {
+                        showMessage('菜品使用成功！', 'success');
+                        // 重新加载菜品列表和食材库存
+                        loadDishes();
+                        loadIngredients();
+                    }
+                })
+                .catch(error => {
+                    console.error('使用菜品失败:', error);
+                    showMessage('使用菜品失败，请重试', 'error');
+                });
+            }
+        }
+        
+        // 注册Service Worker，实现PWA功能
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('Service Worker 注册成功:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('Service Worker 注册失败:', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>

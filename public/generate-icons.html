@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>生成PWA图标</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .icon-preview {
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #2563eb;
+        }
+        .instructions {
+            text-align: left;
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>生成PWA图标</h1>
+        <div class="icon-preview">
+            <h2>图标预览</h2>
+            <svg id="icon-svg" xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 512 512">
+                <rect width="512" height="512" fill="#3b82f6" rx="100" />
+                <path d="M256 150c-30 0-55 25-55 55v102c0 30 25 55 55 55s55-25 55-55V205c0-30-25-55-55-55zm0 30c14 0 25 11 25 25v102c0 14-11 25-25 25s-25-11-25-25V205c0-14 11-25 25-25z" fill="white" />
+                <circle cx="180" cy="300" r="20" fill="white" />
+                <circle cx="332" cy="300" r="20" fill="white" />
+                <rect x="200" y="340" width="112" height="20" rx="10" fill="white" />
+            </svg>
+        </div>
+        <div>
+            <h2>生成PNG图标</h2>
+            <button onclick="generateIcons()">生成图标</button>
+        </div>
+        <div class="instructions">
+            <h2>使用说明</h2>
+            <ol>
+                <li>点击上面的"生成图标"按钮</li>
+                <li>下载生成的两个PNG文件：icon-192x192.png和icon-512x512.png</li>
+                <li>将这两个文件保存到public文件夹中</li>
+                <li>现在你的PWA应用就可以正常使用了</li>
+            </ol>
+        </div>
+        <div class="instructions">
+            <h2>PWA使用说明</h2>
+            <ol>
+                <li>在移动设备上打开 http://localhost:3000/mobile-dish-usage.html</li>
+                <li>浏览器会提示你安装应用，点击"安装"</li>
+                <li>安装完成后，应用会出现在你的主屏幕上</li>
+                <li>你可以像使用原生应用一样使用这个PWA应用</li>
+                <li>应用支持离线访问，即使没有网络连接也可以使用</li>
+            </ol>
+        </div>
+    </div>
+    <script>
+        function generateIcons() {
+            // 创建canvas元素
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 获取SVG元素
+            const svgElement = document.getElementById('icon-svg');
+            const svgData = new XMLSerializer().serializeToString(svgElement);
+            
+            // 生成192x192图标
+            canvas.width = 192;
+            canvas.height = 192;
+            
+            // 使用DOM URL将SVG转换为图片
+            const img = new Image();
+            img.onload = function() {
+                ctx.drawImage(img, 0, 0, 192, 192);
+                // 下载192x192图标
+                const a = document.createElement('a');
+                a.href = canvas.toDataURL('image/png');
+                a.download = 'icon-192x192.png';
+                a.click();
+                
+                // 生成512x512图标
+                canvas.width = 512;
+                canvas.height = 512;
+                ctx.drawImage(img, 0, 0, 512, 512);
+                // 下载512x512图标
+                const b = document.createElement('a');
+                b.href = canvas.toDataURL('image/png');
+                b.download = 'icon-512x512.png';
+                b.click();
+            };
+            
+            img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+        }
+    </script>
+</body>
+</html>

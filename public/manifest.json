@@ -1,0 +1,21 @@
+{
+  "name": "菜品使用",
+  "short_name": "菜品使用",
+  "description": "菜品使用移动端PWA应用",
+  "start_url": "/mobile-dish-usage.html",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
