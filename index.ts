@@ -962,6 +962,84 @@ const app = new Elysia()
     })
   })
 
+  // 食材消耗统计 API
+  // 获取指定月份的食材消耗统计
+  .get('/ingredient-consumption', ({ query }) => {
+    const year = query.year ? parseInt(query.year as string) : new Date().getFullYear();
+    const month = query.month ? parseInt(query.month as string) : new Date().getMonth() + 1;
+    const storeId = query.store_id ? parseInt(query.store_id as string) : 1;
+    
+    const monthStr = month.toString().padStart(2, '0');
+    const datePattern = `${year}-${monthStr}`;
+    
+    const logs = db.prepare(`
+      SELECT id, operation_type, operation_time, details
+      FROM operation_logs
+      WHERE operation_type IN ('dish_use', 'dish_batch_use')
+        AND is_revoked = 0
+        AND store_id = ?
+        AND strftime('%Y-%m', operation_time) = ?
+      ORDER BY operation_time
+    `).all(storeId, datePattern) as Array<{ id: number; operation_type: string; operation_time: string; details: string }>;
+    
+    const consumptionMap = new Map<number, { ingredient_id: number; ingredient_name: string; unit: string; total_quantity: number; use_count: number }>();
+    
+    for (const log of logs) {
+      const details = JSON.parse(log.details);
+      
+      if (log.operation_type === 'dish_use' && details.used_ingredients) {
+        for (const ing of details.used_ingredients) {
+          const key = ing.ingredient_id;
+          if (!consumptionMap.has(key)) {
+            consumptionMap.set(key, {
+              ingredient_id: ing.ingredient_id,
+              ingredient_name: ing.ingredient_name,
+              unit: '',
+              total_quantity: 0,
+              use_count: 0
+            });
+          }
+          const data = consumptionMap.get(key)!;
+          data.total_quantity += ing.quantity;
+          data.use_count += 1;
+        }
+      } else if (log.operation_type === 'dish_batch_use' && details.batch_results) {
+        for (const result of details.batch_results) {
+          if (result.success && result.used_ingredients) {
+            for (const ing of result.used_ingredients) {
+              const key = ing.ingredient_id;
+              if (!consumptionMap.has(key)) {
+                consumptionMap.set(key, {
+                  ingredient_id: ing.ingredient_id,
+                  ingredient_name: ing.ingredient_name,
+                  unit: '',
+                  total_quantity: 0,
+                  use_count: 0
+                });
+              }
+              const data = consumptionMap.get(key)!;
+              data.total_quantity += ing.quantity;
+              data.use_count += 1;
+            }
+          }
+        }
+      }
+    }
+    
+    const result = Array.from(consumptionMap.values());
+    
+    for (const item of result) {
+      const ingredient = db.prepare('SELECT unit FROM ingredients WHERE id = ?').get(item.ingredient_id) as { unit: string } | undefined;
+      if (ingredient) {
+        item.unit = ingredient.unit;
+      }
+    }
+    
+    result.sort((a, b) => b.total_quantity - a.total_quantity);
+    
+    return result;
+  })
+
   .listen(3000);
 
 console.log(`Server running at http://localhost:3000`);
