@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { getDatabaseClient, createOperationLog } from '../db';
 import { optionalAuthMiddleware, verifyToken, Variables } from '../middleware/auth';
-import type { Env, CreateIngredientRequest, UpdateIngredientRequest, IngredientConsumption } from '../types';
+import type { Env, CreateIngredientRequest, UpdateIngredientRequest, IngredientConsumption, BatchCreateIngredientsRequest, BatchCreateIngredientResponse } from '../types';
 
 const ingredientsRouter = new Hono<{ Bindings: Env, Variables: Variables }>();
 
@@ -54,6 +54,16 @@ ingredientsRouter.post('/', optionalAuthMiddleware, async (c) => {
   const { name, quantity, unit, store_id } = body;
   
   const client = getDatabaseClient(c.env);
+  
+  const existingResult = await client.execute({
+    sql: 'SELECT * FROM ingredients WHERE name = ? AND store_id = ?',
+    args: [name, store_id]
+  });
+  
+  if (existingResult.rows.length > 0) {
+    return c.json({ error: '该食材已存在' }, 400);
+  }
+  
   await client.execute({
     sql: 'INSERT INTO ingredients (name, quantity, unit, store_id) VALUES (?, ?, ?, ?)',
     args: [name, quantity, unit, store_id]
@@ -83,6 +93,137 @@ ingredientsRouter.post('/', optionalAuthMiddleware, async (c) => {
   }));
   
   return c.json(ingredient);
+});
+
+ingredientsRouter.post('/batch', optionalAuthMiddleware, async (c) => {
+  const body = await c.req.json<BatchCreateIngredientsRequest>();
+  const { ingredients, store_id } = body;
+
+  if (!ingredients || ingredients.length === 0) {
+    return c.json({ error: '食材列表不能为空' }, 400);
+  }
+
+  const client = getDatabaseClient(c.env);
+  const response: BatchCreateIngredientResponse = {
+    success: 0,
+    failed: 0,
+    errors: []
+  };
+
+  const batchResults: Array<{
+    name: string;
+    success: boolean;
+    operation_type?: 'add' | 'restock';
+    ingredient_id?: number;
+    quantity?: number;
+    old_quantity?: number;
+    new_quantity?: number;
+    unit?: string;
+    error?: string;
+  }> = [];
+
+  let userId = null;
+  const token = c.req.header('Authorization')?.replace('Bearer ', '');
+  if (token) {
+    const payload = await verifyToken(token);
+    if (payload) {
+      userId = parseInt(payload.sub);
+    }
+  }
+
+  for (let i = 0; i < ingredients.length; i++) {
+    const item = ingredients[i];
+    const rowNumber = i + 1;
+
+    if (!item.name || !item.unit) {
+      response.failed++;
+      response.errors.push({
+        row: rowNumber,
+        name: item.name || '未知',
+        error: '名称和单位不能为空'
+      });
+      batchResults.push({
+        name: item.name || '未知',
+        success: false,
+        error: '名称和单位不能为空'
+      });
+      continue;
+    }
+
+    const quantity = item.quantity !== undefined ? item.quantity : 0;
+
+    try {
+      const existingResult = await client.execute({
+        sql: 'SELECT * FROM ingredients WHERE name = ? AND store_id = ?',
+        args: [item.name, store_id]
+      });
+
+      if (existingResult.rows.length > 0) {
+        const existingIngredient = existingResult.rows[0] as any;
+        const oldQuantity = existingIngredient.quantity;
+        const newQuantity = oldQuantity + quantity;
+
+        await client.execute({
+          sql: 'UPDATE ingredients SET quantity = ? WHERE id = ?',
+          args: [newQuantity, existingIngredient.id]
+        });
+
+        response.success++;
+        batchResults.push({
+          name: item.name,
+          success: true,
+          operation_type: 'restock',
+          ingredient_id: existingIngredient.id,
+          quantity,
+          old_quantity: oldQuantity,
+          new_quantity: newQuantity,
+          unit: item.unit
+        });
+      } else {
+        await client.execute({
+          sql: 'INSERT INTO ingredients (name, quantity, unit, store_id) VALUES (?, ?, ?, ?)',
+          args: [item.name, quantity, item.unit, store_id]
+        });
+
+        const result = await client.execute({
+          sql: 'SELECT * FROM ingredients WHERE name = ? AND store_id = ? ORDER BY id DESC LIMIT 1',
+          args: [item.name, store_id]
+        });
+
+        const ingredient = result.rows[0] as any;
+
+        response.success++;
+        batchResults.push({
+          name: item.name,
+          success: true,
+          operation_type: 'add',
+          ingredient_id: ingredient.id,
+          quantity,
+          old_quantity: 0,
+          new_quantity: quantity,
+          unit: item.unit
+        });
+      }
+    } catch (error) {
+      response.failed++;
+      response.errors.push({
+        row: rowNumber,
+        name: item.name,
+        error: '操作失败'
+      });
+      batchResults.push({
+        name: item.name,
+        success: false,
+        error: '操作失败'
+      });
+    }
+  }
+
+  await createOperationLog(c.env, 'ingredient_batch_add', userId, store_id, JSON.stringify({
+    batch_results: batchResults
+  }));
+
+  return c.json(response);
 });
 
 ingredientsRouter.put('/:id', optionalAuthMiddleware, async (c) => {

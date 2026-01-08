@@ -92,6 +92,25 @@ export async function initializeDatabase(env: Env) {
   `);
 
   await client.execute(`
+    CREATE TRIGGER IF NOT EXISTS trim_operation_logs
+    AFTER INSERT ON operation_logs
+    WHEN (
+      SELECT COUNT(*) FROM operation_logs 
+      WHERE store_id = NEW.store_id
+    ) > 100
+    BEGIN
+      DELETE FROM operation_logs 
+      WHERE store_id = NEW.store_id 
+      AND id NOT IN (
+        SELECT id FROM operation_logs 
+        WHERE store_id = NEW.store_id 
+        ORDER BY operation_time DESC 
+        LIMIT 100
+      );
+    END
+  `);
+
+  await client.execute(`
     CREATE INDEX IF NOT EXISTS idx_ingredients_store_id ON ingredients(store_id)
   `);
 

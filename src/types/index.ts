@@ -122,6 +122,27 @@ export interface CreateIngredientRequest {
   store_id: number;
 }
 
+export interface BatchCreateIngredientItem {
+  name: string;
+  quantity?: number;
+  unit: string;
+}
+
+export interface BatchCreateIngredientsRequest {
+  ingredients: BatchCreateIngredientItem[];
+  store_id: number;
+}
+
+export interface BatchCreateIngredientResponse {
+  success: number;
+  failed: number;
+  errors: Array<{
+    row: number;
+    name: string;
+    error: string;
+  }>;
+}
+
 export interface UpdateIngredientRequest {
   quantity: number;
   unit: string;
