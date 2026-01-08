@@ -1,0 +1,1749 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>食材与菜品管理系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 主界面内容（登录前隐藏） -->
+    <div id="main-content" class="hidden">
+        <div class="container mx-auto px-4 py-8">
+            <div class="flex justify-between items-center mb-8">
+                <div class="flex items-center gap-4">
+                    <label for="store-selector" class="text-gray-700 font-medium">选择店铺：</label>
+                    <select id="store-selector" class="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="switchStore()">
+                    </select>
+                </div>
+                <div class="flex items-center gap-4">
+                    <span class="text-gray-700">欢迎，<span id="current-username" class="font-medium"></span></span>
+                    <button onclick="logout()" class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors">退出登录</button>
+                </div>
+            </div>
+            
+            <!-- 导航标签 -->
+            <div class="flex justify-center mb-8">
+                <div class="inline-flex rounded-md shadow-sm" role="group">
+                    <button type="button" class="tab-btn px-6 py-3 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-l-lg hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700" onclick="switchTab('ingredients')">
+                        食材管理
+                    </button>
+                    <button type="button" class="tab-btn px-6 py-3 text-sm font-medium text-gray-900 bg-white border-t border-b border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700" onclick="switchTab('dishes')">
+                        菜品管理
+                    </button>
+                    <button type="button" class="tab-btn px-6 py-3 text-sm font-medium text-gray-900 bg-white border border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700" onclick="switchTab('use-dish')">
+                        菜品使用
+                    </button>
+                    <button type="button" class="tab-btn px-6 py-3 text-sm font-medium text-gray-900 bg-white border border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700" onclick="switchTab('consumption')">
+                        消耗统计
+                    </button>
+                    <button type="button" class="tab-btn px-6 py-3 text-sm font-medium text-gray-900 bg-white border border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700" onclick="switchTab('operation-logs')">
+                        操作记录
+                    </button>
+                    <button type="button" class="tab-btn px-6 py-3 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-r-lg hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700" onclick="switchTab('settings')">
+                        系统设置
+                    </button>
+                </div>
+            </div>
+
+            <!-- 食材管理 -->
+            <div id="ingredients" class="tab-content active">
+                <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">添加新食材</h2>
+                    <form id="add-ingredient-form" class="flex gap-4">
+                        <div class="flex-1">
+                            <label for="ingredient-name" class="block text-sm font-medium text-gray-700 mb-1">食材名称</label>
+                            <input type="text" id="ingredient-name" name="name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="w-32">
+                            <label for="ingredient-unit" class="block text-sm font-medium text-gray-700 mb-1">单位</label>
+                            <input type="text" id="ingredient-unit" name="unit" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="kg、个等">
+                        </div>
+                        <div class="w-32">
+                            <label for="ingredient-quantity" class="block text-sm font-medium text-gray-700 mb-1">初始库存</label>
+                            <input type="number" id="ingredient-quantity" name="quantity" min="0" value="0" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="flex items-end">
+                            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">添加</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">食材列表</h2>
+                    <div id="ingredients-list" class="overflow-x-auto">
+                        <table class="w-full border-collapse">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">ID</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">名称</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">单位</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">库存</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">创建时间</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ingredients-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 菜品管理 -->
+            <div id="dishes" class="tab-content">
+                <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">添加新菜品</h2>
+                    <form id="add-dish-form" class="space-y-4">
+                        <div>
+                            <label for="dish-name" class="block text-sm font-medium text-gray-700 mb-1">菜品名称</label>
+                            <input type="text" id="dish-name" name="name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">所需食材</label>
+                            <div id="dish-ingredients-container" class="space-y-3">
+                                <div class="flex gap-4 items-end">
+                                    <select name="ingredients[0][ingredient_id]" required class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="">选择食材</option>
+                                    </select>
+                                    <div class="flex items-center">
+                                        <input type="number" name="ingredients[0][quantity]" min="1" value="1" placeholder="所需数量" class="w-24 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <span class="px-3 py-2 bg-gray-100 text-gray-700 border-t border-b border-r border-gray-300 rounded-r-md">单位</span>
+                                    </div>
+                                    <button type="button" class="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200" onclick="addDishIngredient()">+</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-end">
+                            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">添加</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">菜品列表</h2>
+                    <div id="dishes-list" class="overflow-x-auto">
+                        <table class="w-full border-collapse">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">ID</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">名称</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">创建时间</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dishes-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 菜品使用 -->
+            <div id="use-dish" class="tab-content">
+                <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">批量使用菜品</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">上传Excel文件</label>
+                            <input type="file" id="excel-file" accept=".xlsx,.xls" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                            <p class="text-sm text-gray-500 mt-1">Excel格式：菜品名 | 数量（一行一个菜品）</p>
+                        </div>
+                        
+                        <div id="excel-preview" class="hidden">
+                            <h3 class="text-lg font-medium mb-2 text-gray-800">解析预览</h3>
+                            <div class="overflow-x-auto mb-4">
+                                <table class="w-full border-collapse">
+                                    <thead>
+                                        <tr class="bg-gray-100">
+                                            <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">菜品名称</th>
+                                            <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">使用数量</th>
+                                            <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">状态</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="preview-body"></tbody>
+                                </table>
+                            </div>
+                            <div id="excel-error" class="hidden mb-4 p-3 bg-red-100 text-red-700 rounded-md"></div>
+                            <div class="flex justify-end gap-3">
+                                <button onclick="clearExcelUpload()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">清除</button>
+                                <button id="submit-batch-btn" onclick="submitBatchUse()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">确认使用</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">使用菜品</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-lg font-medium mb-4 text-gray-800">菜品列表</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-100">
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">ID</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">名称</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">创建时间</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">数量</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="use-dishes-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-lg font-medium mb-4 text-gray-800">实时食材库存</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-100">
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">ID</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">名称</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">单位</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">库存</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">创建时间</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="real-time-ingredients-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 操作记录 -->
+            <div id="operation-logs" class="tab-content">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">操作记录</h2>
+                    <div id="operation-logs-list" class="overflow-x-auto">
+                        <table class="w-full border-collapse">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">ID</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">操作时间</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">操作类型</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">操作人</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">状态</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="operation-logs-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 消耗统计 -->
+            <div id="consumption" class="tab-content">
+                <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">食材月度消耗统计</h2>
+                    <div class="flex gap-4 items-end mb-4">
+                        <div>
+                            <label for="consumption-year" class="block text-sm font-medium text-gray-700 mb-1">年份</label>
+                            <select id="consumption-year" class="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </select>
+                        </div>
+                        <div>
+                            <label for="consumption-month" class="block text-sm font-medium text-gray-700 mb-1">月份</label>
+                            <select id="consumption-month" class="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </select>
+                        </div>
+                        <div class="flex items-end">
+                            <button onclick="loadConsumptionData()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">查询</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">消耗统计结果</h2>
+                    <div id="consumption-list" class="overflow-x-auto">
+                        <table class="w-full border-collapse">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">排名</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">食材ID</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">食材名称</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">单位</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">总消耗量</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">使用次数</th>
+                                </tr>
+                            </thead>
+                            <tbody id="consumption-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 系统设置 -->
+            <div id="settings" class="tab-content">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- 密码修改 -->
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-800">修改密码</h2>
+                        <form id="password-form" class="space-y-4">
+                            <div>
+                                <label for="current-password" class="block text-sm font-medium text-gray-700 mb-1">当前密码</label>
+                                <input type="password" id="current-password" name="current_password" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label for="new-password" class="block text-sm font-medium text-gray-700 mb-1">新密码</label>
+                                <input type="password" id="new-password" name="new_password" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label for="confirm-password" class="block text-sm font-medium text-gray-700 mb-1">确认新密码</label>
+                                <input type="password" id="confirm-password" name="confirm_password" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div id="password-error" class="mb-4 text-red-600 text-sm text-center hidden"></div>
+                            <div id="password-success" class="mb-4 text-green-600 text-sm text-center hidden"></div>
+                            <div class="flex justify-end">
+                                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">修改密码</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- 店铺管理 -->
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-800">添加新店铺</h2>
+                        <form id="add-store-form" class="flex gap-4 mb-6">
+                            <div class="flex-1">
+                                <label for="store-name" class="block text-sm font-medium text-gray-700 mb-1">店铺名称</label>
+                                <input type="text" id="store-name" name="name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div class="flex items-end">
+                                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">添加</button>
+                            </div>
+                        </form>
+
+                        <h2 class="text-xl font-semibold mb-4 text-gray-800">店铺列表</h2>
+                        <div id="stores-list" class="overflow-x-auto">
+                            <table class="w-full border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-100">
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">ID</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">名称</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">创建时间</th>
+                                        <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stores-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 用户管理（仅admin可见） -->
+                <div id="user-management" class="bg-white rounded-lg shadow-md p-6 mt-6 hidden">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">添加新用户</h2>
+                    <form id="add-user-form" class="flex gap-4 mb-6">
+                        <div class="flex-1">
+                            <label for="user-username" class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+                            <input type="text" id="user-username" name="username" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="flex-1">
+                            <label for="user-password" class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                            <input type="password" id="user-password" name="password" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="w-32">
+                            <label for="user-role" class="block text-sm font-medium text-gray-700 mb-1">角色</label>
+                            <select id="user-role" name="role" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="user">普通用户</option>
+                                <option value="admin">管理员</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end">
+                            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">添加</button>
+                        </div>
+                    </form>
+
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">用户列表</h2>
+                    <div id="users-list" class="overflow-x-auto">
+                        <table class="w-full border-collapse">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">ID</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">用户名</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">角色</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">创建时间</th>
+                                    <th class="px-4 py-2 text-left text-sm font-medium text-gray-600 border-b">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 菜品详情模态框 -->
+        <div id="dish-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-40">
+            <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
+                <div id="dish-modal-content">
+                </div>
+            </div>
+        </div>
+
+        <!-- 操作详情模态框 -->
+        <div id="operation-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-40">
+            <div class="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                <div id="operation-modal-content">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 登录模态框 -->
+    <div id="login-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800 text-center">食材与菜品管理系统</h2>
+            <p class="text-gray-600 text-center mb-6">请登录后使用</p>
+            <form id="login-form">
+                <div class="mb-4">
+                    <label for="login-username" class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+                    <input type="text" id="login-username" name="username" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="mb-6">
+                    <label for="login-password" class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                    <input type="password" id="login-password" name="password" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div id="login-error" class="mb-4 text-red-600 text-sm text-center hidden"></div>
+                <div class="flex justify-center">
+                    <button type="submit" class="px-8 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 w-full">登录</button>
+                </div>
+            </form>
+            <p class="text-gray-500 text-center text-sm mt-4">默认账户: admin / 123</p>
+        </div>
+    </div>
+
+    <script>
+        const TOKEN_KEY = 'jwt_token';
+        let currentUser = null;
+        let currentStoreId = 1;
+        let API_BASE_URL = '';
+
+        function setApiBaseUrl(url) {
+            API_BASE_URL = url.replace(/\/$/, '');
+        }
+
+        function getApiUrl(path) {
+            return API_BASE_URL + path;
+        }
+
+        function getToken() {
+            return localStorage.getItem(TOKEN_KEY);
+        }
+
+        function setToken(token) {
+            localStorage.setItem(TOKEN_KEY, token);
+        }
+
+        function clearToken() {
+            localStorage.removeItem(TOKEN_KEY);
+        }
+
+        function getAuthHeaders() {
+            const token = getToken();
+            return token ? { 'Authorization': `Bearer ${token}` } : {};
+        }
+
+        function loadStores() {
+            fetch(getApiUrl('/stores'))
+                .then(response => response.json())
+                .then(stores => {
+                    const selector = document.getElementById('store-selector');
+                    selector.innerHTML = '';
+                    stores.forEach(store => {
+                        const option = document.createElement('option');
+                        option.value = store.id;
+                        option.textContent = store.name;
+                        selector.appendChild(option);
+                    });
+                    selector.value = currentStoreId;
+                })
+                .catch(error => console.error('加载店铺列表失败:', error));
+        }
+
+        function switchStore() {
+            const selector = document.getElementById('store-selector');
+            currentStoreId = parseInt(selector.value);
+            loadIngredients();
+            loadDishes();
+            loadUseDishes();
+            loadRealTimeIngredients();
+            loadOperationLogs();
+        }
+
+        function loadStoresList() {
+            fetch(getApiUrl('/stores'))
+                .then(response => response.json())
+                .then(stores => {
+                    let html = '';
+                    for (const store of stores) {
+                        html += `
+                            <tr>
+                                <td class="px-4 py-2 border-b">${store.id}</td>
+                                <td class="px-4 py-2 border-b">${store.name}</td>
+                                <td class="px-4 py-2 border-b">${store.created_at}</td>
+                                <td class="px-4 py-2 border-b">
+                                    <button class="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm" onclick="deleteStore(${store.id})">删除</button>
+                                </td>
+                            </tr>
+                        `;
+                    }
+                    document.getElementById('stores-body').innerHTML = html;
+                })
+                .catch(error => console.error('加载店铺列表失败:', error));
+        }
+
+        function deleteStore(id) {
+            if (id === 1) {
+                alert('默认店铺不能删除');
+                return;
+            }
+            if (confirm('确定要删除这个店铺吗？')) {
+                fetch(getApiUrl(`/stores/${id}`), {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(data.error);
+                    } else {
+                        loadStoresList();
+                        loadStores();
+                    }
+                })
+                .catch(error => {
+                    console.error('删除店铺失败:', error);
+                    alert('删除失败');
+                });
+            }
+        }
+
+        function loadUsers() {
+            if (currentUser && currentUser.role === 'admin') {
+                document.getElementById('user-management').classList.remove('hidden');
+                fetch(getApiUrl('/users'), {
+                    headers: getAuthHeaders()
+                })
+                .then(response => response.json())
+                .then(users => {
+                    let html = '';
+                    for (const user of users) {
+                        const roleText = user.role === 'admin' ? '管理员' : '普通用户';
+                        const deleteButton = user.id === 1 ? 
+                            '<span class="text-gray-400 text-sm">不可删除</span>' : 
+                            `<button class="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm" onclick="deleteUser(${user.id})">删除</button>`;
+                        
+                        html += `
+                            <tr>
+                                <td class="px-4 py-2 border-b">${user.id}</td>
+                                <td class="px-4 py-2 border-b">${user.username}</td>
+                                <td class="px-4 py-2 border-b">${roleText}</td>
+                                <td class="px-4 py-2 border-b">${user.created_at}</td>
+                                <td class="px-4 py-2 border-b">
+                                    ${deleteButton}
+                                </td>
+                            </tr>
+                        `;
+                    }
+                    document.getElementById('users-body').innerHTML = html;
+                })
+                .catch(error => {
+                    console.error('加载用户列表失败:', error);
+                    if (error.message && error.message.includes('403')) {
+                        document.getElementById('user-management').classList.add('hidden');
+                    }
+                });
+            } else {
+                document.getElementById('user-management').classList.add('hidden');
+            }
+        }
+
+        function addUser() {
+            const username = document.getElementById('user-username').value;
+            const password = document.getElementById('user-password').value;
+            const role = document.getElementById('user-role').value;
+
+            if (!username || !password) {
+                alert('用户名和密码不能为空');
+                return;
+            }
+
+            if (password.length < 3) {
+                alert('密码长度至少3个字符');
+                return;
+            }
+
+            fetch(getApiUrl('/users'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify({ username, password, role })
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    return response.json().then(data => {
+                        throw new Error(data.error || '添加失败');
+                    });
+                }
+            })
+            .then(data => {
+                document.getElementById('add-user-form').reset();
+                loadUsers();
+                alert('用户添加成功！');
+            })
+            .catch(error => {
+                console.error('添加用户失败:', error);
+                alert(error.message || '添加失败');
+            });
+        }
+
+        function deleteUser(id) {
+            if (confirm('确定要删除这个用户吗？')) {
+                fetch(getApiUrl(`/users/${id}`), {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                })
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    } else {
+                        return response.json().then(data => {
+                            throw new Error(data.error || '删除失败');
+                        });
+                    }
+                })
+                .then(data => {
+                    loadUsers();
+                    alert('用户删除成功！');
+                })
+                .catch(error => {
+                    console.error('删除用户失败:', error);
+                    alert(error.message || '删除失败');
+                });
+            }
+        }
+
+        async function checkAuth() {
+            try {
+                const response = await fetch(getApiUrl('/auth/me'), {
+                    headers: getAuthHeaders()
+                });
+                const data = await response.json();
+                if (data.authenticated) {
+                    currentUser = data.user;
+                    showMainContent();
+                } else {
+                    currentUser = null;
+                    clearToken();
+                    showLoginForm();
+                }
+            } catch (error) {
+                console.error('检查登录状态失败:', error);
+                currentUser = null;
+                clearToken();
+                showLoginForm();
+            }
+        }
+
+        function showMainContent() {
+            document.getElementById('main-content').classList.remove('hidden');
+            document.getElementById('login-modal').classList.add('hidden');
+            document.getElementById('current-username').textContent = currentUser.username;
+            loadStores();
+            loadIngredients();
+            loadDishes();
+            loadUseDishes();
+        }
+
+        function showLoginForm() {
+            document.getElementById('main-content').classList.add('hidden');
+            document.getElementById('login-modal').classList.remove('hidden');
+            document.getElementById('login-error').classList.add('hidden');
+            document.getElementById('login-form').reset();
+        }
+
+        async function login(username, password) {
+            try {
+                const response = await fetch(getApiUrl('/auth/login'), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    if (data.token) {
+                        setToken(data.token);
+                    }
+                    currentUser = data.user;
+                    showMainContent();
+                } else {
+                    document.getElementById('login-error').textContent = data.error;
+                    document.getElementById('login-error').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('登录失败:', error);
+                document.getElementById('login-error').textContent = '登录失败，请稍后重试';
+                document.getElementById('login-error').classList.remove('hidden');
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch(getApiUrl('/auth/logout'), { method: 'POST' });
+            } catch (error) {
+                console.error('退出登录请求失败:', error);
+            }
+            clearToken();
+            currentUser = null;
+            showLoginForm();
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.getElementById(tabName).classList.add('active');
+            
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-100', 'text-blue-700');
+                btn.classList.add('bg-white', 'text-gray-900');
+            });
+            event.target.classList.remove('bg-white', 'text-gray-900');
+            event.target.classList.add('bg-blue-100', 'text-blue-700');
+            
+            switch (tabName) {
+                case 'ingredients':
+                    loadIngredients();
+                    break;
+                case 'dishes':
+                    loadDishes();
+                    loadIngredientsOptions();
+                    break;
+                case 'use-dish':
+                    loadUseDishes();
+                    loadRealTimeIngredients();
+                    break;
+                case 'consumption':
+                    initConsumptionSelectors();
+                    loadConsumptionData();
+                    break;
+                case 'operation-logs':
+                    loadOperationLogs();
+                    break;
+                case 'settings':
+                    loadStoresList();
+                    loadUsers();
+                    break;
+            }
+        }
+
+        function loadIngredients() {
+            fetch(getApiUrl(`/ingredients-table?store_id=${currentStoreId}`))
+                .then(response => response.json())
+                .then(ingredients => {
+                    ingredients.sort((a, b) => a.quantity - b.quantity);
+                    
+                    let html = '';
+                    for (const ing of ingredients) {
+                        html += `
+                            <tr>
+                                <td class="px-4 py-2 border-b">${ing.id}</td>
+                                <td class="px-4 py-2 border-b">${ing.name}</td>
+                                <td class="px-4 py-2 border-b">${ing.unit}</td>
+                                <td class="px-4 py-2 border-b">${ing.quantity}</td>
+                                <td class="px-4 py-2 border-b">${ing.created_at}</td>
+                                <td class="px-4 py-2 border-b">
+                                    <div class="flex gap-2">
+                                        <input type="number" id="restock-${ing.id}" min="1" value="" placeholder="补货数量" class="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                                        <button class="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm" onclick="restockIngredient(${ing.id})">补货</button>
+                                        <button class="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm ml-2" onclick="editIngredient(${ing.id})">编辑</button>
+                                        <button class="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm ml-2" onclick="deleteIngredient(${ing.id})">删除</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    }
+                    document.getElementById('ingredients-body').innerHTML = html;
+                })
+                .catch(error => console.error('加载食材列表失败:', error));
+        }
+
+        function loadDishes() {
+            fetch(getApiUrl(`/dishes-table?store_id=${currentStoreId}`))
+                .then(response => response.json())
+                .then(dishes => {
+                    let html = '';
+                    for (const dish of dishes) {
+                        html += `
+                            <tr>
+                                <td class="px-4 py-2 border-b">${dish.id}</td>
+                                <td class="px-4 py-2 border-b">${dish.name}</td>
+                                <td class="px-4 py-2 border-b">${dish.created_at}</td>
+                                <td class="px-4 py-2 border-b">
+                                    <button class="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm mr-2" onclick="showDishModal(${dish.id})">详情</button>
+                                    <button class="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm" onclick="deleteDish(${dish.id})">删除</button>
+                                </td>
+                            </tr>
+                        `;
+                    }
+                    document.getElementById('dishes-body').innerHTML = html;
+                })
+                .catch(error => console.error('加载菜品列表失败:', error));
+        }
+
+        function loadUseDishes() {
+            fetch(getApiUrl(`/dishes-table?store_id=${currentStoreId}`))
+                .then(response => response.json())
+                .then(dishes => {
+                    let html = '';
+                    for (const dish of dishes) {
+                        html += `
+                            <tr>
+                                <td class="px-4 py-2 border-b">${dish.id}</td>
+                                <td class="px-4 py-2 border-b">${dish.name}</td>
+                                <td class="px-4 py-2 border-b">${dish.created_at}</td>
+                                <td class="px-4 py-2 border-b">
+                                    <input type="number" id="dish-qty-${dish.id}" min="1" value="1" class="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                                </td>
+                                <td class="px-4 py-2 border-b">
+                                    <button class="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm" onclick="useDish(${dish.id})">使用</button>
+                                </td>
+                            </tr>
+                        `;
+                    }
+                    document.getElementById('use-dishes-body').innerHTML = html;
+                })
+                .catch(error => console.error('加载菜品使用列表失败:', error));
+        }
+
+        function loadRealTimeIngredients() {
+            fetch(getApiUrl(`/ingredients-table?store_id=${currentStoreId}`))
+                .then(response => response.json())
+                .then(ingredients => {
+                    ingredients.sort((a, b) => a.quantity - b.quantity);
+                    
+                    let html = '';
+                    for (const ing of ingredients) {
+                        html += `
+                            <tr>
+                                <td class="px-4 py-2 border-b">${ing.id}</td>
+                                <td class="px-4 py-2 border-b">${ing.name}</td>
+                                <td class="px-4 py-2 border-b">${ing.unit}</td>
+                                <td class="px-4 py-2 border-b">${ing.quantity}</td>
+                                <td class="px-4 py-2 border-b">${ing.created_at}</td>
+                            </tr>
+                        `;
+                    }
+                    document.getElementById('real-time-ingredients-body').innerHTML = html;
+                })
+                .catch(error => console.error('加载实时食材列表失败:', error));
+        }
+
+        let ingredientsData = [];
+
+        function loadIngredientsOptions() {
+            fetch(getApiUrl(`/ingredients-options?store_id=${currentStoreId}`))
+                .then(response => response.json())
+                .then(ingredients => {
+                    ingredientsData = ingredients;
+                    const selects = document.querySelectorAll('[name^="ingredients["][name$="[ingredient_id]"]');
+                    selects.forEach(select => {
+                        const currentValue = select.value;
+                        while (select.children.length > 1) {
+                            select.removeChild(select.lastChild);
+                        }
+                        let optionsHtml = '';
+                        for (const ing of ingredients) {
+                            optionsHtml += `<option value="${ing.id}">${ing.name}</option>`;
+                        }
+                        select.insertAdjacentHTML('beforeend', optionsHtml);
+                        select.value = currentValue;
+                        select.dispatchEvent(new Event('change'));
+                    });
+                })
+                .catch(error => console.error('加载食材选项失败:', error));
+        }
+
+        function editIngredient(id) {
+            fetch(getApiUrl(`/ingredients/${id}`))
+                .then(response => response.json())
+                .then(ingredient => {
+                    const newQuantity = prompt('请输入新的库存数量：', ingredient.quantity);
+                    if (newQuantity !== null) {
+                        fetch(getApiUrl(`/ingredients/${id}`), {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...getAuthHeaders()
+                            },
+                            body: JSON.stringify({ 
+                                quantity: parseInt(newQuantity), 
+                                unit: ingredient.unit
+                            })
+                        })
+                        .then(response => {
+                            if (response.ok) {
+                                loadIngredients();
+                            } else {
+                                alert('更新失败');
+                            }
+                        });
+                    }
+                });
+        }
+
+        function updateIngredientUnit() {
+            const select = this;
+            const ingredientId = select.value;
+            const unitSpan = select.nextElementSibling.querySelector('span');
+            
+            if (ingredientId) {
+                const ingredient = ingredientsData.find(ing => ing.id == ingredientId);
+                if (ingredient) {
+                    unitSpan.textContent = ingredient.unit;
+                } else {
+                    unitSpan.textContent = '单位';
+                }
+            } else {
+                unitSpan.textContent = '单位';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            setApiBaseUrl('https://s.ccnu.link');
+            await checkAuth();
+            
+            const loginForm = document.getElementById('login-form');
+            loginForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const username = document.getElementById('login-username').value;
+                const password = document.getElementById('login-password').value;
+                login(username, password);
+            });
+            
+            const addIngredientForm = document.getElementById('add-ingredient-form');
+            addIngredientForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this);
+                const data = {
+                    name: formData.get('name'),
+                    quantity: parseInt(formData.get('quantity')),
+                    unit: formData.get('unit'),
+                    store_id: currentStoreId
+                };
+                
+                fetch(getApiUrl('/ingredients'), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders()
+                    },
+                    body: JSON.stringify(data)
+                })
+                .then(response => {
+                    if (response.ok) {
+                        addIngredientForm.reset();
+                        loadIngredients();
+                    } else {
+                        alert('添加失败');
+                    }
+                })
+                .catch(error => {
+                    console.error('添加食材失败:', error);
+                    alert('添加失败');
+                });
+            });
+            
+            const addDishForm = document.getElementById('add-dish-form');
+            addDishForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this);
+                const data = {
+                    name: formData.get('name'),
+                    ingredients: [],
+                    store_id: currentStoreId
+                };
+                
+                const ingredientSelects = document.querySelectorAll('[name^="ingredients["]:not([name$="[quantity]"])');
+                ingredientSelects.forEach((select, index) => {
+                    const ingredientId = select.value;
+                    const quantity = document.querySelector(`[name="ingredients[${index}][quantity]"]`).value;
+                    if (ingredientId && quantity) {
+                        data.ingredients.push({
+                            ingredient_id: parseInt(ingredientId),
+                            quantity: parseInt(quantity)
+                        });
+                    }
+                });
+                
+                fetch(getApiUrl('/dishes'), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders()
+                    },
+                    body: JSON.stringify(data)
+                })
+                .then(response => {
+                    if (response.ok) {
+                        addDishForm.reset();
+                        const container = document.getElementById('dish-ingredients-container');
+                        container.innerHTML = `
+                            <div class="flex gap-4 items-end">
+                                <select name="ingredients[0][ingredient_id]" required class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">选择食材</option>
+                                </select>
+                                <input type="number" name="ingredients[0][quantity]" min="1" value="1" placeholder="所需数量" class="w-24 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <button type="button" class="px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200" onclick="addDishIngredient()">+</button>
+                            </div>
+                        `;
+                        ingredientIndex = 1;
+                        loadDishes();
+                        loadUseDishes();
+                        loadIngredientsOptions();
+                    } else {
+                        alert('添加失败');
+                    }
+                })
+                .catch(error => {
+                    console.error('添加菜品失败:', error);
+                    alert('添加失败');
+                });
+            });
+            
+            const selects = document.querySelectorAll('[name^="ingredients["][name$="[ingredient_id]"]');
+            selects.forEach(select => {
+                select.addEventListener('change', updateIngredientUnit);
+            });
+
+            const passwordForm = document.getElementById('password-form');
+            passwordForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const currentPassword = document.getElementById('current-password').value;
+                const newPassword = document.getElementById('new-password').value;
+                const confirmPassword = document.getElementById('confirm-password').value;
+
+                document.getElementById('password-error').classList.add('hidden');
+                document.getElementById('password-success').classList.add('hidden');
+
+                if (newPassword !== confirmPassword) {
+                    document.getElementById('password-error').textContent = '两次输入的密码不一致';
+                    document.getElementById('password-error').classList.remove('hidden');
+                    return;
+                }
+
+                if (newPassword.length < 3) {
+                    document.getElementById('password-error').textContent = '新密码长度至少3个字符';
+                    document.getElementById('password-error').classList.remove('hidden');
+                    return;
+                }
+
+                fetch(getApiUrl('/change-password'), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders()
+                    },
+                    body: JSON.stringify({
+                        oldPassword: currentPassword,
+                        newPassword: newPassword
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message === '密码修改成功') {
+                        document.getElementById('password-success').textContent = '密码修改成功';
+                        document.getElementById('password-success').classList.remove('hidden');
+                        passwordForm.reset();
+                    } else {
+                        document.getElementById('password-error').textContent = data.error || '修改失败';
+                        document.getElementById('password-error').classList.remove('hidden');
+                    }
+                })
+                .catch(error => {
+                    console.error('修改密码失败:', error);
+                    document.getElementById('password-error').textContent = '修改失败，请稍后重试';
+                    document.getElementById('password-error').classList.remove('hidden');
+                });
+            });
+            
+            const addStoreForm = document.getElementById('add-store-form');
+            addStoreForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this);
+                const data = {
+                    name: formData.get('name')
+                };
+                
+                fetch(getApiUrl('/stores'), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                })
+                .then(response => {
+                    if (response.ok) {
+                        addStoreForm.reset();
+                        loadStoresList();
+                        loadStores();
+                    } else {
+                        alert('添加失败');
+                    }
+                })
+                .catch(error => {
+                    console.error('添加店铺失败:', error);
+                    alert('添加失败');
+                });
+            });
+
+            const addUserForm = document.getElementById('add-user-form');
+            addUserForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                addUser();
+            });
+            
+            document.getElementById('excel-file').addEventListener('change', handleExcelUpload);
+            
+            const submitBtn = document.getElementById('submit-batch-btn');
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        });
+
+        let ingredientIndex = 1;
+        function addDishIngredient() {
+            const container = document.getElementById('dish-ingredients-container');
+            const newRow = document.createElement('div');
+            newRow.className = 'flex gap-4 items-end';
+            newRow.innerHTML = `
+                <select name="ingredients[${ingredientIndex}][ingredient_id]" required class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">选择食材</option>
+                </select>
+                <div class="flex items-center">
+                    <input type="number" name="ingredients[${ingredientIndex}][quantity]" min="1" value="1" placeholder="所需数量" class="w-24 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <span class="px-3 py-2 bg-gray-100 text-gray-700 border-t border-b border-r border-gray-300 rounded-r-md">单位</span>
+                </div>
+                <button type="button" class="px-3 py-2 bg-red-100 text-red-700 rounded-md hover:bg-red-200" onclick="removeDishIngredient(this)">-</button>
+            `;
+            container.appendChild(newRow);
+            loadIngredientsOptions();
+            const select = newRow.querySelector('select');
+            select.addEventListener('change', updateIngredientUnit);
+            ingredientIndex++;
+        }
+
+        function removeDishIngredient(btn) {
+            btn.parentElement.remove();
+        }
+
+        function showDishModal(dishId) {
+            const modal = document.getElementById('dish-modal');
+            const content = document.getElementById('dish-modal-content');
+            content.innerHTML = '<div class="text-center py-8">加载中...</div>';
+            modal.classList.remove('hidden');
+            
+            fetch(getApiUrl(`/dishes/${dishId}`))
+                .then(response => response.json())
+                .then(data => {
+                    let ingredientsHtml = '';
+                    if (data.ingredients && data.ingredients.length > 0) {
+                        ingredientsHtml = '<h3 class="text-lg font-medium mb-2 text-gray-800">所需食材：</h3>';
+                        ingredientsHtml += '<ul class="list-disc list-inside mb-4 space-y-1">';
+                        data.ingredients.forEach(ing => {
+                            ingredientsHtml += `<li>${ing.name}：${ing.quantity} ${ing.unit}</li>`;
+                        });
+                        ingredientsHtml += '</ul>';
+                    }
+                    
+                    content.innerHTML = `
+                        <h3 class="text-xl font-semibold mb-4 text-gray-800">${data.name} 详情</h3>
+                        ${ingredientsHtml}
+                        <div class="flex justify-end gap-3">
+                            <button onclick="closeDishModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">关闭</button>
+                        </div>
+                    `;
+                })
+                .catch(error => {
+                    content.innerHTML = '<div class="text-center py-8 text-red-600">加载失败</div>';
+                });
+        }
+
+        function closeDishModal() {
+            document.getElementById('dish-modal').classList.add('hidden');
+        }
+
+        function deleteIngredient(id) {
+            if (confirm('确定要删除这个食材吗？')) {
+                fetch(getApiUrl(`/ingredients/${id}`), {
+                    method: 'DELETE',
+                    headers: {
+                        ...getAuthHeaders()
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        loadIngredients();
+                    } else {
+                        alert('删除失败');
+                    }
+                })
+                .catch(error => {
+                    console.error('删除食材失败:', error);
+                    alert('删除失败');
+                });
+            }
+        }
+
+        function restockIngredient(id) {
+            const restockInput = document.getElementById(`restock-${id}`);
+            const restockQuantity = parseInt(restockInput.value);
+            
+            if (isNaN(restockQuantity) || restockQuantity <= 0) {
+                alert('请输入有效的补货数量');
+                return;
+            }
+            
+            fetch(getApiUrl(`/ingredients/${id}`))
+                .then(response => response.json())
+                .then(ingredient => {
+                    const newQuantity = ingredient.quantity + restockQuantity;
+                    
+                    return fetch(getApiUrl(`/ingredients/${id}`), {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...getAuthHeaders()
+                        },
+                        body: JSON.stringify({ 
+                            quantity: newQuantity, 
+                            unit: ingredient.unit
+                        })
+                    });
+                })
+                .then(response => {
+                    if (response.ok) {
+                        loadIngredients();
+                    } else {
+                        alert('补货失败');
+                    }
+                })
+                .catch(error => {
+                    console.error('补货失败:', error);
+                    alert('补货失败');
+                });
+        }
+
+        function deleteDish(id) {
+            if (confirm('确定要删除这个菜品吗？')) {
+                fetch(getApiUrl(`/dishes/${id}`), {
+                    method: 'DELETE'
+                })
+                .then(response => {
+                    if (response.ok) {
+                        loadDishes();
+                        loadUseDishes();
+                    } else {
+                        alert('删除失败');
+                    }
+                })
+                .catch(error => {
+                    console.error('删除菜品失败:', error);
+                    alert('删除失败');
+                });
+            }
+        }
+
+        function useDish(id) {
+            const quantityInput = document.getElementById(`dish-qty-${id}`);
+            const quantity = parseInt(quantityInput.value);
+            
+            if (isNaN(quantity) || quantity <= 0) {
+                alert('请输入有效的数量');
+                return;
+            }
+            
+            fetch(getApiUrl(`/dishes/${id}/use?quantity=${quantity}&store_id=${currentStoreId}`), {
+                method: 'POST',
+                headers: {
+                    ...getAuthHeaders()
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    loadIngredients();
+                    loadDishes();
+                    loadUseDishes();
+                    loadRealTimeIngredients();
+                    alert('菜品使用成功！');
+                }
+            })
+            .catch(error => {
+                console.error('使用菜品失败:', error);
+                alert('使用菜品失败');
+            });
+        }
+        
+        let excelData = [];
+        
+        function handleExcelUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    
+                    excelData = [];
+                    const previewBody = document.getElementById('preview-body');
+                    previewBody.innerHTML = '';
+                    
+                    for (let i = 0; i < jsonData.length; i++) {
+                        const row = jsonData[i];
+                        if (row.length >= 2) {
+                            const dishName = String(row[0]).trim();
+                            const quantity = parseInt(row[1]);
+                            
+                            if (dishName && !isNaN(quantity) && quantity > 0) {
+                                excelData.push({ name: dishName, quantity });
+                            }
+                        }
+                    }
+                    
+                    if (excelData.length === 0) {
+                        showExcelError('未找到有效的菜品数据');
+                        return;
+                    }
+                    
+                    excelData.forEach(item => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td class="px-4 py-2 border-b">${item.name}</td>
+                            <td class="px-4 py-2 border-b">${item.quantity}</td>
+                            <td class="px-4 py-2 border-b text-gray-500">待处理</td>
+                        `;
+                        previewBody.appendChild(tr);
+                    });
+                    
+                    document.getElementById('excel-preview').classList.remove('hidden');
+                    document.getElementById('excel-error').classList.add('hidden');
+                    
+                    const submitBtn = document.getElementById('submit-batch-btn');
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    
+                } catch (error) {
+                    showExcelError('解析Excel文件失败：' + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        
+        function showExcelError(message) {
+            const errorDiv = document.getElementById('excel-error');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+            document.getElementById('excel-preview').classList.add('hidden');
+        }
+        
+        function clearExcelUpload() {
+            document.getElementById('excel-file').value = '';
+            document.getElementById('excel-preview').classList.add('hidden');
+            document.getElementById('excel-error').classList.add('hidden');
+            excelData = [];
+            
+            const submitBtn = document.getElementById('submit-batch-btn');
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+        
+        async function submitBatchUse() {
+            const previewBody = document.getElementById('preview-body');
+            const rows = previewBody.querySelectorAll('tr');
+            const submitBtn = document.getElementById('submit-batch-btn');
+            
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            
+            try {
+                const response = await fetch(getApiUrl('/dishes/batch-use'), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders()
+                    },
+                    body: JSON.stringify({ dishes: excelData, store_id: currentStoreId })
+                });
+                
+                console.log('Response status:', response.status);
+                const result = await response.json();
+                console.log('Result:', result);
+                
+                if (!result.results) {
+                    throw new Error('返回数据格式错误: ' + JSON.stringify(result));
+                }
+                
+                let successCount = 0;
+                let failCount = 0;
+                
+                result.results.forEach((item, index) => {
+                    const row = rows[index];
+                    const statusCell = row.cells[2];
+                    
+                    if (item.success) {
+                        statusCell.textContent = '成功';
+                        statusCell.className = 'px-4 py-2 border-b text-green-600';
+                        successCount++;
+                    } else {
+                        statusCell.textContent = item.error;
+                        statusCell.className = 'px-4 py-2 border-b text-red-600';
+                        failCount++;
+                    }
+                });
+                
+                loadIngredients();
+                loadDishes();
+                loadUseDishes();
+                loadRealTimeIngredients();
+                
+                alert(`处理完成！成功：${successCount}，失败：${failCount}`);
+                
+            } catch (error) {
+                console.error('批量使用失败:', error);
+                alert('批量使用失败: ' + error.message);
+            }
+        }
+
+        function loadOperationLogs() {
+            fetch(getApiUrl(`/operation-logs?store_id=${currentStoreId}`))
+                .then(response => response.json())
+                .then(logs => {
+                    let html = '';
+                    for (const log of logs) {
+                        const operationTypeText = getOperationTypeText(log.operation_type);
+                        const statusText = log.is_revoked ? '已撤回' : '未撤回';
+                        const statusClass = log.is_revoked ? 'text-gray-500' : 'text-green-600';
+                        const revokeButton = !log.is_revoked ? 
+                            `<button class="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm" onclick="revokeOperation(${log.id})">撤回</button>` : 
+                            `<span class="text-gray-500 text-sm">${log.revoked_time ? new Date(log.revoked_time).toLocaleString('zh-CN') : ''}</span>`;
+                        
+                        html += `
+                            <tr>
+                                <td class="px-4 py-2 border-b">${log.id}</td>
+                                <td class="px-4 py-2 border-b">${new Date(log.operation_time).toLocaleString('zh-CN')}</td>
+                                <td class="px-4 py-2 border-b">${operationTypeText}</td>
+                                <td class="px-4 py-2 border-b">${log.user_name || '未知'}</td>
+                                <td class="px-4 py-2 border-b ${statusClass}">${statusText}</td>
+                                <td class="px-4 py-2 border-b">
+                                    <div class="flex gap-2">
+                                        <button class="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm" onclick="showOperationModal(${log.id})">详情</button>
+                                        ${revokeButton}
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    }
+                    document.getElementById('operation-logs-body').innerHTML = html;
+                })
+                .catch(error => console.error('加载操作记录失败:', error));
+        }
+
+        function getOperationTypeText(operationType) {
+            const typeMap = {
+                'ingredient_add': '添加食材',
+                'ingredient_restock': '食材补货',
+                'ingredient_edit': '编辑食材',
+                'ingredient_delete': '删除食材',
+                'dish_use': '使用菜品',
+                'dish_batch_use': '批量使用菜品'
+            };
+            return typeMap[operationType] || operationType;
+        }
+
+        function showOperationModal(logId) {
+            const modal = document.getElementById('operation-modal');
+            const content = document.getElementById('operation-modal-content');
+            content.innerHTML = '<div class="text-center py-8">加载中...</div>';
+            modal.classList.remove('hidden');
+            
+            fetch(getApiUrl(`/operation-logs/${logId}`))
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        content.innerHTML = '<div class="text-center py-8 text-red-600">加载失败</div>';
+                        return;
+                    }
+                    
+                    const details = JSON.parse(data.details);
+                    const operationTypeText = getOperationTypeText(data.operation_type);
+                    
+                    let detailsHtml = '';
+                    
+                    switch (data.operation_type) {
+                        case 'ingredient_add':
+                            detailsHtml = `
+                                <div class="space-y-2">
+                                    <p><strong>食材名称：</strong>${details.ingredient_name}</p>
+                                    <p><strong>数量：</strong>${details.quantity}</p>
+                                    <p><strong>单位：</strong>${details.unit}</p>
+                                </div>
+                            `;
+                            break;
+                            
+                        case 'ingredient_restock':
+                            detailsHtml = `
+                                <div class="space-y-2">
+                                    <p><strong>食材名称：</strong>${details.ingredient_name}</p>
+                                    <p><strong>补货数量：</strong>${details.restock_quantity}</p>
+                                    <p><strong>原库存：</strong>${details.old_quantity}</p>
+                                    <p><strong>新库存：</strong>${details.new_quantity}</p>
+                                    <p><strong>单位：</strong>${details.unit}</p>
+                                </div>
+                            `;
+                            break;
+                            
+                        case 'ingredient_edit':
+                            detailsHtml = `
+                                <div class="space-y-2">
+                                    <p><strong>食材名称：</strong>${details.ingredient_name}</p>
+                                    <p><strong>原库存：</strong>${details.old_quantity}</p>
+                                    <p><strong>新库存：</strong>${details.new_quantity}</p>
+                                    <p><strong>原单位：</strong>${details.old_unit}</p>
+                                    <p><strong>新单位：</strong>${details.new_unit}</p>
+                                </div>
+                            `;
+                            break;
+                            
+                        case 'ingredient_delete':
+                            detailsHtml = `
+                                <div class="space-y-2">
+                                    <p><strong>食材名称：</strong>${details.deleted_ingredient.name}</p>
+                                    <p><strong>数量：</strong>${details.deleted_ingredient.quantity}</p>
+                                    <p><strong>单位：</strong>${details.deleted_ingredient.unit}</p>
+                                </div>
+                            `;
+                            break;
+                            
+                        case 'dish_use':
+                            detailsHtml = `
+                                <div class="space-y-2">
+                                    <p><strong>菜品名称：</strong>${details.dish_name}</p>
+                                    <p><strong>使用数量：</strong>${details.quantity}</p>
+                                    <div class="mt-3">
+                                        <strong>使用的食材：</strong>
+                                        <ul class="list-disc list-inside mt-2 space-y-1">
+                                            ${details.used_ingredients.map(ing => 
+                                                `<li>${ing.ingredient_name}：${ing.quantity}</li>`
+                                            ).join('')}
+                                        </ul>
+                                    </div>
+                                </div>
+                            `;
+                            break;
+                            
+                        case 'dish_batch_use':
+                            if (!details.batch_results || details.batch_results.length === 0) {
+                                detailsHtml = '<p class="text-gray-500">无操作记录</p>';
+                            } else {
+                                const hasSuccess = details.batch_results.some(result => result.success);
+                                if (!hasSuccess) {
+                                    detailsHtml = '<p class="text-red-500">所有操作均失败</p>';
+                                } else {
+                                    detailsHtml = `
+                                        <div class="space-y-2">
+                                            <strong>批量使用结果：</strong>
+                                            <ul class="list-disc list-inside mt-2 space-y-2">
+                                                ${details.batch_results.map(result => {
+                                                    if (result.success) {
+                                                        return `
+                                                            <li class="text-green-600">
+                                                                <strong>${result.name}</strong> - 成功
+                                                                <ul class="list-disc list-inside ml-4 mt-1">
+                                                                    ${result.used_ingredients.map(ing => 
+                                                                        `<li class="text-gray-700">${ing.ingredient_name}：${ing.quantity}</li>`
+                                                                    ).join('')}
+                                                                </ul>
+                                                            </li>
+                                                        `;
+                                                    } else {
+                                                        return `<li class="text-red-600"><strong>${result.name}</strong> - ${result.error}</li>`;
+                                                    }
+                                                }).join('')}
+                                            </ul>
+                                        </div>
+                                    `;
+                                }
+                            }
+                            break;
+                            
+                        default:
+                            detailsHtml = '<p class="text-gray-500">未知操作类型</p>';
+                    }
+                    
+                    content.innerHTML = `
+                        <h3 class="text-xl font-semibold mb-4 text-gray-800">操作详情</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <p class="text-sm text-gray-600">操作ID：${data.id}</p>
+                                <p class="text-sm text-gray-600">操作时间：${new Date(data.operation_time).toLocaleString('zh-CN')}</p>
+                                <p class="text-sm text-gray-600">操作类型：${operationTypeText}</p>
+                                <p class="text-sm text-gray-600">操作人：${data.user_name || '未知'}</p>
+                                <p class="text-sm text-gray-600">状态：${data.is_revoked ? '已撤回' : '未撤回'}</p>
+                                ${data.is_revoked ? `<p class="text-sm text-gray-600">撤回时间：${new Date(data.revoked_time).toLocaleString('zh-CN')}</p>` : ''}
+                                ${data.is_revoked ? `<p class="text-sm text-gray-600">撤回人：${data.revoked_by_name || '未知'}</p>` : ''}
+                            </div>
+                            <div class="border-t pt-4">
+                                <h4 class="font-medium text-gray-800 mb-2">操作详情：</h4>
+                                ${detailsHtml}
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-3 mt-6">
+                            <button onclick="closeOperationModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">关闭</button>
+                        </div>
+                    `;
+                })
+                .catch(error => {
+                    content.innerHTML = '<div class="text-center py-8 text-red-600">加载失败</div>';
+                });
+        }
+
+        function closeOperationModal() {
+            document.getElementById('operation-modal').classList.add('hidden');
+        }
+
+        async function revokeOperation(logId) {
+            if (!confirm('确定要撤回此操作吗？')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(getApiUrl(`/operation-logs/revoke/${logId}`), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders()
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    alert('撤回成功！');
+                    loadOperationLogs();
+                    loadIngredients();
+                    loadDishes();
+                    loadUseDishes();
+                    loadRealTimeIngredients();
+                }
+            } catch (error) {
+                console.error('撤回操作失败:', error);
+                alert('撤回失败，请稍后重试');
+            }
+        }
+
+        function initConsumptionSelectors() {
+            const yearSelect = document.getElementById('consumption-year');
+            const monthSelect = document.getElementById('consumption-month');
+            
+            const currentYear = new Date().getFullYear();
+            const currentMonth = new Date().getMonth() + 1;
+            
+            yearSelect.innerHTML = '';
+            for (let i = currentYear - 5; i <= currentYear; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i + '年';
+                if (i === currentYear) {
+                    option.selected = true;
+                }
+                yearSelect.appendChild(option);
+            }
+            
+            monthSelect.innerHTML = '';
+            for (let i = 1; i <= 12; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i + '月';
+                if (i === currentMonth) {
+                    option.selected = true;
+                }
+                monthSelect.appendChild(option);
+            }
+        }
+
+        function loadConsumptionData() {
+            const year = document.getElementById('consumption-year').value;
+            const month = document.getElementById('consumption-month').value;
+            
+            fetch(getApiUrl(`/ingredient-consumption?year=${year}&month=${month}&store_id=${currentStoreId}`))
+                .then(response => response.json())
+                .then(data => {
+                    let html = '';
+                    if (data.length === 0) {
+                        html = '<tr><td colspan="6" class="px-4 py-2 border-b text-center text-gray-500">暂无数据</td></tr>';
+                    } else {
+                        for (let i = 0; i < data.length; i++) {
+                            const item = data[i];
+                            html += `
+                                <tr>
+                                    <td class="px-4 py-2 border-b">${i + 1}</td>
+                                    <td class="px-4 py-2 border-b">${item.ingredient_id}</td>
+                                    <td class="px-4 py-2 border-b">${item.ingredient_name}</td>
+                                    <td class="px-4 py-2 border-b">${item.unit}</td>
+                                    <td class="px-4 py-2 border-b">${item.total_quantity}</td>
+                                    <td class="px-4 py-2 border-b">${item.use_count}</td>
+                                </tr>
+                            `;
+                        }
+                    }
+                    document.getElementById('consumption-body').innerHTML = html;
+                })
+                .catch(error => {
+                    console.error('加载消耗统计失败:', error);
+                    document.getElementById('consumption-body').innerHTML = '<tr><td colspan="6" class="px-4 py-2 border-b text-center text-red-600">加载失败</td></tr>';
+                });
+        }
+    </script>
+</body>
+</html>
