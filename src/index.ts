@@ -14,6 +14,7 @@ type Env = {
   TURSO_DATABASE_URL: string;
   TURSO_AUTH_TOKEN: string;
   ENVIRONMENT?: string;
+  CORS_DOMAINS?: string;
 };
 
 const app = new Hono<{ Bindings: Env }>();

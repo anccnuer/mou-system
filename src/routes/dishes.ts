@@ -107,18 +107,46 @@ dishesRouter.post('/', async (c) => {
   });
 });
 
-dishesRouter.delete('/:id', async (c) => {
+dishesRouter.delete('/:id', optionalAuthMiddleware, async (c) => {
   const id = c.req.param('id');
   const client = getDatabaseClient(c.env);
+  
   const result = await client.execute({
+    sql: 'SELECT * FROM dishes WHERE id = ?',
+    args: [id]
+  });
+  
+  if (result.rows.length === 0) {
+    return c.json({ error: '菜品不存在' });
+  }
+  
+  const dish = result.rows[0] as any;
+  
+  await client.execute({
+    sql: 'DELETE FROM dish_ingredients WHERE dish_id = ?',
+    args: [id]
+  });
+  
+  await client.execute({
     sql: 'DELETE FROM dishes WHERE id = ?',
     args: [id]
   });
   
-  if (result.rowsAffected === 0) {
-    return c.json({ error: '菜品不存在' });
+  let userId = null;
+  
+  const token = c.req.header('Authorization')?.replace('Bearer ', '');
+  if (token) {
+    const payload = await verifyToken(token);
+    if (payload) {
+      userId = parseInt(payload.sub);
+    }
   }
-  return c.json({ message: '菜品删除成功' });
+  
+  await createOperationLog(c.env, 'dish_delete', userId, dish.store_id || 1, JSON.stringify({
+    deleted_dish: dish
+  }));
+  
+  return c.json({ success: true, message: '菜品删除成功' });
 });
 
 dishesRouter.post('/:id/use', optionalAuthMiddleware, async (c) => {
