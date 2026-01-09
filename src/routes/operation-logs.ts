@@ -101,7 +101,27 @@ operationLogsRouter.post('/revoke/:id', optionalAuthMiddleware, async (c) => {
       }
       success = true;
       break;
-      
+
+    case 'ingredient_batch_add':
+      const { batch_results: batch_add_results } = details;
+      for (const result of batch_add_results) {
+        if (result.success) {
+          if (result.operation_type === 'add') {
+            await client.execute({
+              sql: 'DELETE FROM ingredients WHERE id = ?',
+              args: [result.ingredient_id]
+            });
+          } else if (result.operation_type === 'restock') {
+            await client.execute({
+              sql: 'UPDATE ingredients SET quantity = ? WHERE id = ?',
+              args: [result.old_quantity, result.ingredient_id]
+            });
+          }
+        }
+      }
+      success = true;
+      break;
+
     default:
       error = '不支持撤回此操作类型';
   }
