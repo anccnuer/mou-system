@@ -27,7 +27,7 @@ export async function initializeDatabase(env: Env) {
     CREATE TABLE IF NOT EXISTS stores (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT UNIQUE NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now', '+8 hours'))
     )
   `);
 
@@ -38,7 +38,7 @@ export async function initializeDatabase(env: Env) {
       quantity INTEGER NOT NULL DEFAULT 0,
       unit TEXT NOT NULL DEFAULT '个',
       store_id INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now', '+8 hours')),
       FOREIGN KEY (store_id) REFERENCES stores(id)
     )
   `);
@@ -48,7 +48,7 @@ export async function initializeDatabase(env: Env) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       store_id INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now', '+8 hours')),
       FOREIGN KEY (store_id) REFERENCES stores(id)
     )
   `);
@@ -70,7 +70,7 @@ export async function initializeDatabase(env: Env) {
       username TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'user',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (datetime('now', '+8 hours'))
     )
   `);
 
@@ -78,7 +78,7 @@ export async function initializeDatabase(env: Env) {
     CREATE TABLE IF NOT EXISTS operation_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       operation_type TEXT NOT NULL,
-      operation_time TEXT NOT NULL DEFAULT (datetime('now')),
+      operation_time TEXT NOT NULL DEFAULT (datetime('now', '+8 hours')),
       user_id INTEGER,
       store_id INTEGER NOT NULL,
       details TEXT NOT NULL,
@@ -292,7 +292,7 @@ export async function getStoreById(env: Env, storeId: number): Promise<any> {
 export async function createOperationLog(env: Env, operationType: string, userId: number | null, storeId: number, details: string): Promise<any> {
   const client = getDatabaseClient(env);
   const result = await client.execute({
-    sql: 'INSERT INTO operation_logs (operation_type, user_id, store_id, details) VALUES (?, ?, ?, ?) RETURNING *',
+    sql: 'INSERT INTO operation_logs (operation_type, user_id, store_id, details, operation_time) VALUES (?, ?, ?, ?, datetime("now", "+8 hours")) RETURNING *',
     args: [operationType, userId, storeId, details]
   });
   return result.rows[0];
@@ -334,10 +334,9 @@ export async function revokeOperation(env: Env, logId: number, revokedBy: number
     return { error: '该操作已被撤回' };
   }
   
-  const revokedTime = new Date().toISOString();
   await client.execute({
-    sql: 'UPDATE operation_logs SET is_revoked = 1, revoked_time = ?, revoked_by = ? WHERE id = ?',
-    args: [revokedTime, revokedBy, logId]
+    sql: 'UPDATE operation_logs SET is_revoked = 1, revoked_time = datetime("now", "+8 hours"), revoked_by = ? WHERE id = ?',
+    args: [revokedBy, logId]
   });
   return { success: true, log };
 }

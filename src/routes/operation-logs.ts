@@ -102,6 +102,38 @@ operationLogsRouter.post('/revoke/:id', optionalAuthMiddleware, async (c) => {
       success = true;
       break;
 
+    case 'dish_delete':
+      const { deleted_dish, deleted_ingredients } = details;
+      
+      const existingDish = await client.execute({
+        sql: 'SELECT id FROM dishes WHERE id = ?',
+        args: [deleted_dish.id]
+      });
+      
+      if (existingDish.rows.length > 0) {
+        error = '该菜品已存在，无法撤回';
+        break;
+      }
+      
+      await client.execute({
+        sql: 'INSERT INTO dishes (id, name, store_id) VALUES (?, ?, ?)',
+        args: [
+          deleted_dish.id,
+          deleted_dish.name,
+          deleted_dish.store_id
+        ]
+      });
+      if (deleted_ingredients && deleted_ingredients.length > 0) {
+        for (const ing of deleted_ingredients) {
+          await client.execute({
+            sql: 'INSERT INTO dish_ingredients (dish_id, ingredient_id, quantity) VALUES (?, ?, ?)',
+            args: [ing.dish_id, ing.ingredient_id, ing.quantity]
+          });
+        }
+      }
+      success = true;
+      break;
+
     case 'ingredient_batch_add':
       const { batch_results: batch_add_results } = details;
       for (const result of batch_add_results) {

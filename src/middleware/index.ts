@@ -2,29 +2,6 @@ import { Context, Next } from 'hono';
 import { initializeDatabase } from '../db';
 import type { Env } from '../types';
 
-export async function corsMiddleware(c: Context<{ Bindings: Env }>, next: Next) {
-  const corsDomains = c.env.CORS_DOMAINS;
-  const allowedOrigins = corsDomains ? corsDomains.split(',').map(d => d.trim()) : '*';
-  
-  const origin = c.req.header('Origin');
-  const isAllowed = allowedOrigins.includes('*') || (origin && allowedOrigins.includes(origin));
-  
-  if (isAllowed) {
-    c.header('Access-Control-Allow-Origin', origin || '*');
-  } else {
-    c.header('Access-Control-Allow-Origin', allowedOrigins[0] || '*');
-  }
-  
-  c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  
-  if (c.req.method === 'OPTIONS') {
-    return c.newResponse(null, 204);
-  }
-  
-  await next();
-}
-
 export async function loggerMiddleware(c: Context, next: Next) {
   const start = Date.now();
   const method = c.req.method;

@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { corsMiddleware, loggerMiddleware, errorHandlerMiddleware } from './middleware';
+import { cors } from 'hono/cors';
+import { loggerMiddleware, errorHandlerMiddleware } from './middleware';
 import authRouter from './routes/auth';
 import usersRouter from './routes/users';
 import storesRouter from './routes/stores';
@@ -20,7 +21,26 @@ type Env = {
 const app = new Hono<{ Bindings: Env }>();
 
 app.use('*', errorHandlerMiddleware);
-app.use('*', corsMiddleware);
+app.use('*', cors({
+  origin: (origin, c) => {
+    const corsDomains = c.env.CORS_DOMAINS;
+    const allowedOrigins = corsDomains ? corsDomains.split(',').map((d: string) => d.trim()) : '*';
+    
+    if (allowedOrigins === '*') {
+      return '*';
+    }
+    
+    if (origin && allowedOrigins.includes(origin)) {
+      return origin;
+    }
+    
+    return allowedOrigins[0] || '*';
+  },
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 86400,
+  credentials: true,
+}));
 app.use('*', loggerMiddleware);
 
 app.get('/', async (c) => {

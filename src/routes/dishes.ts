@@ -122,6 +122,13 @@ dishesRouter.delete('/:id', optionalAuthMiddleware, async (c) => {
   
   const dish = result.rows[0] as any;
   
+  const ingredientsResult = await client.execute({
+    sql: 'SELECT * FROM dish_ingredients WHERE dish_id = ?',
+    args: [id]
+  });
+  
+  const deletedIngredients = ingredientsResult.rows;
+  
   await client.execute({
     sql: 'DELETE FROM dish_ingredients WHERE dish_id = ?',
     args: [id]
@@ -143,7 +150,8 @@ dishesRouter.delete('/:id', optionalAuthMiddleware, async (c) => {
   }
   
   await createOperationLog(c.env, 'dish_delete', userId, dish.store_id || 1, JSON.stringify({
-    deleted_dish: dish
+    deleted_dish: dish,
+    deleted_ingredients: deletedIngredients
   }));
   
   return c.json({ success: true, message: '菜品删除成功' });
