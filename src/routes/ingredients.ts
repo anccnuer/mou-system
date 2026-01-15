@@ -98,6 +98,7 @@ ingredientsRouter.post('/', optionalAuthMiddleware, async (c) => {
 ingredientsRouter.post('/batch', optionalAuthMiddleware, async (c) => {
   const body = await c.req.json<BatchCreateIngredientsRequest>();
   const { ingredients, store_id } = body;
+  const batchSize = c.req.query('batch_size') ? parseInt(c.req.query('batch_size') as string) : 50;
 
   if (!ingredients || ingredients.length === 0) {
     return c.json({ error: '食材列表不能为空' }, 400);

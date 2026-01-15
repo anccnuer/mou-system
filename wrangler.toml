@@ -8,7 +8,7 @@ CORS_DOMAINS = "*"
 
 [[env.development.vars]]
 ENVIRONMENT = "development"
-CORS_DOMAINS = "*"
+CORS_DOMAINS = "https://xn--fctz62bir0aba.top"
 
 [env.production]
 name = "system-hono-prod"

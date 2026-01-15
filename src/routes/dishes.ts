@@ -84,6 +84,53 @@ dishesRouter.post('/', async (c) => {
   const dish = dishResult.rows[0];
   const dishId = dish.id;
 
+  const invalidIngredients = [];
+  
+  for (const ing of ingredients) {
+    const ingredientResult = await client.execute({
+      sql: `
+        SELECT i.id, i.name, i.store_id, s.name as store_name
+        FROM ingredients i
+        JOIN stores s ON i.store_id = s.id
+        WHERE i.id = ?
+      `,
+      args: [ing.ingredient_id]
+    });
+    
+    if (ingredientResult.rows.length === 0) {
+      invalidIngredients.push({
+        ingredient_id: ing.ingredient_id,
+        ingredient_name: '未知',
+        store_id: null,
+        store_name: '食材不存在'
+      });
+      continue;
+    }
+    
+    const ingredient = ingredientResult.rows[0] as any;
+    
+    if (ingredient.store_id !== store_id) {
+      invalidIngredients.push({
+        ingredient_id: ingredient.id,
+        ingredient_name: ingredient.name,
+        store_id: ingredient.store_id,
+        store_name: ingredient.store_name
+      });
+    }
+  }
+  
+  if (invalidIngredients.length > 0) {
+    await client.execute({
+      sql: 'DELETE FROM dishes WHERE id = ?',
+      args: [dishId]
+    });
+    
+    return c.json({
+      error: '以下食材不属于当前店铺',
+      invalid_ingredients: invalidIngredients
+    }, 400);
+  }
+
   for (const ing of ingredients) {
     await client.execute({
       sql: 'INSERT INTO dish_ingredients (dish_id, ingredient_id, quantity) VALUES (?, ?, ?)',
@@ -261,10 +308,15 @@ dishesRouter.post('/:id/use', optionalAuthMiddleware, async (c) => {
 dishesRouter.post('/batch-use', optionalAuthMiddleware, async (c) => {
   const body = await c.req.json<BatchUseDishRequest>();
   const { dishes, store_id } = body;
-  const results = [];
+  const batchSize = c.req.query('batch_size') ? parseInt(c.req.query('batch_size') as string) : 50;
   
-  const batchResults = [];
+  if (!dishes || dishes.length === 0) {
+    return c.json({ error: '菜品列表不能为空' }, 400);
+  }
+
   const client = getDatabaseClient(c.env);
+  const results = [];
+  const batchResults = [];
   
   for (const item of dishes) {
     const dishResult = await client.execute({
@@ -294,16 +346,22 @@ dishesRouter.post('/batch-use', optionalAuthMiddleware, async (c) => {
       continue;
     }
     
+    let stockError = null;
     for (const ing of ingredients.rows) {
       const totalNeeded = (ing as any).required_quantity * item.quantity;
       if ((ing as any).current_quantity < totalNeeded) {
-        results.push({ 
-          name: item.name, 
-          success: false, 
-          error: `${(ing as any).name} 库存不足，需要 ${totalNeeded}，当前 ${(ing as any).current_quantity}` 
-        });
-        continue;
+        stockError = `${(ing as any).name} 库存不足，需要 ${totalNeeded}，当前 ${(ing as any).current_quantity}`;
+        break;
       }
+    }
+    
+    if (stockError) {
+      results.push({ 
+        name: item.name, 
+        success: false, 
+        error: stockError
+      });
+      continue;
     }
     
     const usedIngredients = ingredients.rows.map(ing => ({
@@ -312,12 +370,14 @@ dishesRouter.post('/batch-use', optionalAuthMiddleware, async (c) => {
       quantity: (ing as any).required_quantity * item.quantity
     }));
     
-    for (const ing of ingredients.rows) {
-      await client.execute({
+    const updatePromises = ingredients.rows.map(ing => 
+      client.execute({
         sql: 'UPDATE ingredients SET quantity = quantity - ? WHERE id = ?',
         args: [(ing as any).required_quantity * item.quantity, (ing as any).id]
-      });
-    }
+      })
+    );
+    
+    await Promise.all(updatePromises);
     
     results.push({ name: item.name, success: true });
     batchResults.push({
